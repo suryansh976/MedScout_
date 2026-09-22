@@ -1,0 +1,105 @@
+UI/UX Design Specification
+Visual system, page-by-page design, typography, glassmorphism and 3D
+1. Design Direction
+Clinical-tech rather than sci-fi. The visual system should communicate evidence, calmness and precision. Glassmorphism is a surface treatment, not the information hierarchy. Use 3D primarily for atmosphere and navigation.
+2. Color System
+Token	Hex	Use
+Primary Blue	#0B5FFF	Primary CTA, links, selected filters
+Teal	#0E8F8F	Clinical/verified accent
+Deep Ink	#122033	Primary text
+Slate	#526173	Secondary text
+Surface	#F7FAFC	Base background
+White	#FFFFFF	Cards
+Success	#16845B	Verified/within-budget
+Warning	#B7791F	Estimated/stale
+Danger	#C53030	Safety/error
+Glass Border	rgba(255,255,255,.45)	Glass surfaces
+3. Typography
+Role	Font	Weight	Size guidance
+Display	Inter or Manrope	700–800	44–64px desktop; 34–44px mobile
+H1	Inter	700	36–48px
+H2	Inter	700	28–36px
+Body	Inter	400–500	15–17px
+Data	Inter	500–600	14–16px
+Labels	Inter	600	12–14px
+Chat text	Inter	400–500	15–16px
+Avoid decorative display fonts. Medical comparison screens need predictable glyphs, numeric legibility and strong tabular alignment.
+4. Glassmorphism Rules
+•	Use translucent white surfaces around 60–80% opacity.
+•	Backdrop blur 12–24px where supported.
+•	Use a 1px low-contrast border.
+•	Keep shadows soft and shallow.
+•	Never place low-contrast body text directly on busy glass.
+•	Critical clinical numbers should sit on opaque/high-contrast surfaces.
+5. 3D Background Rules
+•	Hero: abstract medical network / orbital nodes / translucent geometry.
+•	Search page: subtle animated grid or particles, not a full 3D scene behind data.
+•	Hospital detail: optional low-motion depth layer.
+•	Comparison: no continuous heavy 3D; use small animated transitions.
+•	Mobile: reduce particle count, DPR and animation frequency.
+6. Page-by-Page Specification
+Page	Layout/content	Visual treatment
+Landing/Home	Hero search box; disease/treatment prompt; budget and location quick filters; trust/data provenance strip; example comparisons; chatbot entry.	3D hero background + glass search panel
+Search	Left filter rail on desktop; chips on mobile; hospital cards; sort controls; data-confidence badges.	Minimal motion; no distracting 3D
+Hospital Detail	Overview, disease treatments, disease-specific outcomes, cost, facilities, accreditation, sources, last updated.	Subtle depth/hover only
+Disease Results	Disease title; treatment options; hospitals; disease-specific metrics; cost/location filters.	Animated result transitions
+Compare	Side-by-side sticky hospital headers; rows for disease, outcomes, patients treated, cost, distance, facilities, evidence status.	Charts only where data is comparable
+Chatbot	Conversation pane + cited hospital cards + comparison drawer + extracted filters.	Animated message entrance, restrained
+Source/Evidence	Source document, publisher, reporting period, extracted fields, verification status, conflict history.	No 3D
+Admin Verification	Evidence queue; source preview; extracted values; approve/reject/edit; audit history.	Dense professional dashboard
+About/Trust	Methodology, ranking explanation, source policy, limitations, privacy.	Static
+7. Hospital Card
+•	Hospital name + location
+•	Relevant speciality
+•	Disease/treatment match
+•	Disease-specific outcome metric if available
+•	Patients treated if available
+•	Estimated/published cost range
+•	Distance
+•	Data confidence
+•	Last updated
+•	Compare button
+8. Comparison UX
+Use a horizontally scrollable comparison table on mobile. Pin the hospital name and disease/treatment row. Highlight differences, not winners. Let users expand methodology/source details.
+9. Accessibility
+•	Keyboard navigation
+•	Visible focus states
+•	Minimum contrast target of WCAG AA
+•	Reduced motion
+•	Semantic headings
+•	Screen-reader labels for metrics
+•	Do not rely on color alone for verification status
+Research Sources & Verification References
+ABDM Health Facility Registry (HFR) — Government of India / ABDM
+National repository of health facilities; includes public and private hospitals, clinics, diagnostic laboratories, imaging centres and pharmacies.
+URL: https://ahpr.abdm.gov.in/about
+Clinical Establishments Division — Downloads — Ministry of Health & Family Welfare
+Provides templates for information/statistics collection, display of rates, costing of procedures and lists of medical procedures.
+URL: https://www.clinicalestablishments.mohfw.gov.in/en/download
+Clinical Establishments — Monthly Information & Statistics — Ministry of Health & Family Welfare
+Shows structured fields for registration, facility type, OPD/IPD volumes, deaths and other establishment statistics.
+URL: https://clinicalestablishments.mohfw.gov.in/sites/default/files/2022-06/4001_0.pdf
+Standardized Health Care Services Costing Template — Ministry of Health & Family Welfare
+Provides a costing framework covering pharmacy, consumables/implants, staff, OT, investigations, radiology, blood bank, rooms/beds, ICU/CCU and overheads.
+URL: https://clinicalestablishments.mohfw.gov.in/sites/default/files/2022-06/289_0.pdf
+PM-JAY Package Rate / RFE documentation — National Health Authority
+Describes hospitalization package rates and included components such as bed, nursing, professional fees, anaesthesia, medicines, implants and specified diagnostics.
+URL: https://nha.gov.in/img/pmjay-files/RFE_Volume_II.pdf
+NABH Hospital Standards — National Accreditation Board for Hospitals & Healthcare Providers
+Quality and patient-safety framework covering patient care, infection control, continuous quality improvement, facilities, human resources and information management.
+URL: https://portal.nabh.co/standard.aspx
+ICMR Portals / Clinical Trials Registry India — Indian Council of Medical Research
+Provides access to ICMR health-research resources and the Clinical Trials Registry India.
+URL: https://www.icmr.gov.in/icmr-portals?q=clinical+trial
+Three.js — Three.js
+Current web 3D rendering library; current site shows r186 and supports WebGL/WebGPU-related rendering capabilities.
+URL: https://threejs.org/
+Three.js WebGLRenderer — Three.js
+WebGL 2 renderer documentation.
+URL: https://threejs.org/docs/pages/WebGLRenderer.html
+GSAP — GSAP
+High-performance browser animation library with timelines, ScrollTrigger and React support.
+URL: https://gsap.com/docs/v3/
+Drei — React Three Fiber ecosystem
+Reusable helpers for React Three Fiber / Three.js scenes.
+URL: https://drei.docs.pmnd.rs/
