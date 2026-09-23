@@ -360,4 +360,43 @@ export function revokeReportAccess(userId, reportId) {
   return true;
 }
 
+// ─── ABDM Hospital Access Grants (Consent Manager) ──────────────────────────
+
+export function getUserAccessGrants(userId) {
+  const user = findUserById(userId);
+  if (!user) return [];
+  return user.accessGrants || [];
+}
+
+export function addUserAccessGrant(userId, grantData) {
+  const user = findUserById(userId);
+  if (!user) return null;
+  if (!user.accessGrants) user.accessGrants = [];
+
+  const newGrant = {
+    id: `grnt_${Date.now()}`,
+    hospitalId: grantData.hospitalId || "all_verified",
+    hospitalName: grantData.hospitalName || "Authorized Clinical Provider",
+    grantedTo: grantData.grantedTo || "Emergency & Inpatient Care",
+    scope: grantData.scope || ["reports", "emergency_info"],
+    status: "active",
+    expiresInDays: Number(grantData.expiresInDays) || 30,
+    expiresAt: new Date(Date.now() + (Number(grantData.expiresInDays) || 30) * 86400000).toISOString(),
+    createdAt: new Date().toISOString()
+  };
+
+  user.accessGrants.unshift(newGrant);
+  updateUser(userId, { accessGrants: user.accessGrants });
+  return newGrant;
+}
+
+export function deleteUserAccessGrant(userId, grantId) {
+  const user = findUserById(userId);
+  if (!user || !user.accessGrants) return false;
+  const filtered = user.accessGrants.filter(g => g.id !== grantId);
+  user.accessGrants = filtered;
+  updateUser(userId, { accessGrants: filtered });
+  return true;
+}
+
 export { users };

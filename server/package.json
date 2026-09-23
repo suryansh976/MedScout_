@@ -7,6 +7,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node src/server.js",
+    "test": "node tests/fullSystemTest.mjs && node tests/chatbotAudit.mjs",
+    "test:system": "node tests/fullSystemTest.mjs",
     "audit:chat": "node tests/chatbotAudit.mjs"
   },
   "dependencies": {

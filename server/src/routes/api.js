@@ -123,9 +123,47 @@ router.get("/hospitals", (req, res) => {
   });
 });
 
+const HOSPITAL_ID_ALIASES = {
+  "demo-apollo-delhi": "hosp_apollo_indraprastha",
+  "demo-fortis-delhi": "hosp_fortis_escorts",
+  "demo-fortis-gurugram": "hosp_fortis_memorial_gurgaon",
+  "demo-medanta-gurugram": "hosp_medanta_gurgaon",
+  "demo-medicos-centre": "hosp_medicos_chandigarh",
+  "demo-shakuntala-devi-vig": "hosp_shakuntala_devi_jalandhar",
+  "demo-satyam-trauma": "hosp_satyam_jalandhar",
+  "demo-fortis-rajan-dhall": "hosp_fortis_vasant_kunj",
+  "demo-max-gurugram": "hosp_max_gurgaon",
+  "demo-tata-mumbai": "hosp_tata_memorial",
+  "demo-blk-memorial": "hosp_blk_memorial",
+  "demo-moolchand-medicity": "hosp_moolchand_medicity"
+};
+
+// Helper: find hospital by exact, alias, or normalized ID (supports hosp_ and demo- formats)
+function findHospitalById(paramId) {
+  if (!paramId) return null;
+  const cleanId = String(paramId).trim().toLowerCase();
+
+  // 1. Alias lookup
+  if (HOSPITAL_ID_ALIASES[cleanId]) {
+    const aliased = hospitalsState.find(h => h.id === HOSPITAL_ID_ALIASES[cleanId]);
+    if (aliased) return aliased;
+  }
+
+  // 2. Direct match
+  const found = hospitalsState.find(h => h.id.toLowerCase() === cleanId);
+  if (found) return found;
+
+  // 3. Normalized match: strip hosp_ or demo- and all hyphens/underscores
+  const normalizedTarget = cleanId.replace(/^(demo[-_]|hosp[-_])/, "").replace(/[-_]/g, "");
+  return hospitalsState.find(h => {
+    const norm = h.id.toLowerCase().replace(/^(demo[-_]|hosp[-_])/, "").replace(/[-_]/g, "");
+    return norm === normalizedTarget;
+  }) || null;
+}
+
 // 2. GET /api/hospitals/:id - single profile
 router.get("/hospitals/:id", (req, res) => {
-  const hospital = hospitalsState.find(h => h.id === req.params.id);
+  const hospital = findHospitalById(req.params.id);
   if (!hospital) {
     return res.status(404).json({ success: false, error: "Hospital not found in registry" });
   }
@@ -181,16 +219,18 @@ router.post("/search", (req, res) => {
   });
 });
 
-// 5. POST /api/compare - compare selected hospitals
-router.post("/compare", (req, res) => {
-  const { hospitalIds = [], diseaseId = "dis_cabg", treatmentId = "trt_cabg_onpump" } = req.body;
+// 5. GET & POST /api/compare - compare selected hospitals
+const handleCompare = (req, res) => {
+  const rawIds = req.body?.hospitalIds || (req.query.ids ? req.query.ids.split(",") : []);
+  const diseaseId = req.body?.diseaseId || req.query.diseaseId || req.query.disease || "dis_cabg";
+  const treatmentId = req.body?.treatmentId || req.query.treatmentId || req.query.treatment || "trt_cabg_onpump";
 
-  if (!hospitalIds.length) {
-    return res.status(400).json({ success: false, error: "Please provide hospitalIds to compare" });
+  if (!rawIds || !rawIds.length) {
+    return res.status(400).json({ success: false, error: "Please provide hospitalIds or ids to compare" });
   }
 
-  const matched = hospitalIds.map(id => {
-    const hosp = hospitalsState.find(h => h.id === id);
+  const matched = rawIds.map(id => {
+    const hosp = findHospitalById(id.trim());
     if (!hosp) return null;
     return enrichHospital(hosp, diseaseId, treatmentId);
   }).filter(Boolean);
@@ -199,10 +239,15 @@ router.post("/compare", (req, res) => {
     success: true,
     diseaseId,
     treatmentId,
+    total: matched.length,
     count: matched.length,
     data: matched
   });
-});
+};
+
+router.get("/compare", handleCompare);
+router.post("/compare", handleCompare);
+
 
 // 6. POST /api/chat - AI Chatbot reasoning turn (with session state)
 // Session state is maintained client-side and passed back each turn

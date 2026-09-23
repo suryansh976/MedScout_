@@ -26,7 +26,10 @@ import {
   addUserReport,
   deleteUserReport,
   grantReportAccess,
-  revokeReportAccess
+  revokeReportAccess,
+  getUserAccessGrants,
+  addUserAccessGrant,
+  deleteUserAccessGrant
 } from "../data/usersStore.js";
 import { authenticateToken } from "../middleware/auth.js";
 
@@ -252,4 +255,48 @@ router.delete("/reports/:id/revoke", (req, res) => {
   res.json({ success: true, message: "Hospital access grant revoked." });
 });
 
+// ─── ABDM Hospital Access Grants (Consent Manager) ──────────────────────────
+
+// GET /api/user/access-grants - list active grants
+router.get("/access-grants", (req, res) => {
+  const grants = getUserAccessGrants(req.user.id);
+  res.json({
+    success: true,
+    total: grants.length,
+    data: grants
+  });
+});
+
+// POST /api/user/access-grants - create access grant
+router.post("/access-grants", (req, res) => {
+  const { hospitalId, hospitalName, grantedTo, scope, expiresInDays } = req.body;
+  const grant = addUserAccessGrant(req.user.id, {
+    hospitalId,
+    hospitalName,
+    grantedTo,
+    scope,
+    expiresInDays
+  });
+
+  if (!grant) {
+    return res.status(404).json({ success: false, error: "User not found." });
+  }
+
+  res.status(201).json({
+    success: true,
+    data: grant,
+    message: "Hospital access grant authorized."
+  });
+});
+
+// DELETE /api/user/access-grants/:id - revoke grant
+router.delete("/access-grants/:id", (req, res) => {
+  const removed = deleteUserAccessGrant(req.user.id, req.params.id);
+  if (!removed) {
+    return res.status(404).json({ success: false, error: "Access grant not found." });
+  }
+  res.json({ success: true, message: "Hospital access grant revoked." });
+});
+
 export default router;
+
