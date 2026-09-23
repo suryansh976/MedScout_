@@ -10,8 +10,15 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
+const allowedOrigin = process.env.ALLOWED_ORIGIN;
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGIN || "http://localhost:3000",
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (!allowedOrigin || allowedOrigin === "*" || allowedOrigin === origin || origin.endsWith(".vercel.app") || origin.includes("localhost")) {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
@@ -74,31 +81,42 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, error: "Internal server error." });
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`=======================================================`);
-  console.log(`  MedScout Clinical Evidence REST API v2.0 — Auth      `);
-  console.log(`  Port: http://localhost:${PORT}                       `);
-  console.log(`  Registry Node: ABDM HFR v4.2 / MoHFW CEA Synced      `);
-  console.log(`  Auth: JWT (15m access) + Refresh (7d)                `);
-  console.log(`  Roles: guest | user | hospital_admin | verifier |     `);
-  console.log(`         platform_admin                                 `);
-  console.log(`=======================================================`);
-  console.log(`\n  Demo Accounts:`);
-  console.log(`  patient@demo.com   / Demo@1234  → user`);
-  console.log(`  hospital@demo.com  / Demo@1234  → hospital_admin`);
-  console.log(`  verifier@demo.com  / Demo@1234  → verifier`);
-  console.log(`  admin@demo.com     / Demo@1234  → platform_admin\n`);
-});
+export { app };
+export default app;
 
-server.on("error", error => {
-  if (error.code === "EADDRINUSE") {
-    console.error(`MedScout API is already running or another process owns port ${PORT}.`);
-    console.error(`Check http://localhost:${PORT}/health before starting another instance.`);
-    console.error(`To use another port in PowerShell: $env:PORT=5001; npm start`);
+const isDirectRun = process.argv[1] && (
+  process.argv[1].endsWith("server.js") || 
+  process.argv[1].endsWith("server.mjs")
+);
+
+if (isDirectRun && !process.env.VERCEL) {
+  const server = app.listen(PORT, () => {
+    console.log(`=======================================================`);
+    console.log(`  MedScout Clinical Evidence REST API v2.0 — Auth      `);
+    console.log(`  Port: http://localhost:${PORT}                       `);
+    console.log(`  Registry Node: ABDM HFR v4.2 / MoHFW CEA Synced      `);
+    console.log(`  Auth: JWT (15m access) + Refresh (7d)                `);
+    console.log(`  Roles: guest | user | hospital_admin | verifier |     `);
+    console.log(`         platform_admin                                 `);
+    console.log(`=======================================================`);
+    console.log(`\n  Demo Accounts:`);
+    console.log(`  patient@demo.com   / Demo@1234  → user`);
+    console.log(`  hospital@demo.com  / Demo@1234  → hospital_admin`);
+    console.log(`  verifier@demo.com  / Demo@1234  → verifier`);
+    console.log(`  admin@demo.com     / Demo@1234  → platform_admin\n`);
+  });
+
+  server.on("error", error => {
+    if (error.code === "EADDRINUSE") {
+      console.error(`MedScout API is already running or another process owns port ${PORT}.`);
+      console.error(`Check http://localhost:${PORT}/health before starting another instance.`);
+      console.error(`To use another port in PowerShell: $env:PORT=5001; npm start`);
+      process.exitCode = 1;
+      return;
+    }
+
+    console.error("MedScout API failed to start:", error);
     process.exitCode = 1;
-    return;
-  }
+  });
+}
 
-  console.error("MedScout API failed to start:", error);
-  process.exitCode = 1;
-});
