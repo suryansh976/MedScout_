@@ -44,6 +44,47 @@ let users = [
       }
     ],
     savedComparisons: [],
+    medicalReports: [
+      {
+        id: "rep_001",
+        title: "Comprehensive Lipid Profile & HbA1c",
+        category: "Laboratory",
+        reportDate: "2026-09-12",
+        provider: "Dr. Lal PathLabs, New Delhi",
+        clinicalSummary: "Elevated Total Cholesterol (240 mg/dL), LDL (162 mg/dL), HbA1c 7.1%. Liver function normal.",
+        relevantCondition: "Cardiology",
+        fileType: "PDF",
+        status: "private",
+        activeGrant: null,
+        createdAt: "2026-09-12T08:30:00.000Z"
+      },
+      {
+        id: "rep_002",
+        title: "2D Echocardiogram with Color Doppler",
+        category: "Cardiology",
+        reportDate: "2026-09-08",
+        provider: "Sir Ganga Ram Hospital Cardiology Lab",
+        clinicalSummary: "Left ventricular ejection fraction (LVEF) 52%. Mild hypokinesia in anterior wall. Grade 1 diastolic dysfunction.",
+        relevantCondition: "Cardiology",
+        fileType: "PDF",
+        status: "ai_shared",
+        activeGrant: null,
+        createdAt: "2026-09-08T14:15:00.000Z"
+      },
+      {
+        id: "rep_003",
+        title: "Bilateral Knee Digital X-Ray (Weight Bearing)",
+        category: "Radiology",
+        reportDate: "2026-08-28",
+        provider: "Max Diagnostic Imaging Center",
+        clinicalSummary: "Grade 3 joint space narrowing in medial compartment bilateral knees with subchondral sclerosis and osteophytes.",
+        relevantCondition: "Severe Knee Osteoarthritis",
+        fileType: "DICOM/PDF",
+        status: "private",
+        activeGrant: null,
+        createdAt: "2026-08-28T11:00:00.000Z"
+      }
+    ],
     chatSessions: [],
     passwordResetToken: null,
     passwordResetExpiry: null,
@@ -234,6 +275,88 @@ export function removeSavedComparison(userId, comparisonId) {
   if (!user) return false;
   const filtered = user.savedComparisons.filter(c => c.id !== comparisonId);
   updateUser(userId, { savedComparisons: filtered });
+  return true;
+}
+
+// ─── Smart Health Card & Medical Reports ──────────────────────────────────────
+
+export function getUserReports(userId) {
+  const user = findUserById(userId);
+  if (!user) return [];
+  return user.medicalReports || [];
+}
+
+export function addUserReport(userId, reportData) {
+  const user = findUserById(userId);
+  if (!user) return null;
+  if (!user.medicalReports) user.medicalReports = [];
+
+  const newReport = {
+    id: `rep_${Date.now()}`,
+    title: reportData.title || "Untitled Medical Report",
+    category: reportData.category || "Laboratory", // Laboratory, Radiology, Cardiology, Pathology, Discharge Summary
+    reportDate: reportData.reportDate || new Date().toISOString().split("T")[0],
+    provider: reportData.provider || "Diagnostic Center",
+    clinicalSummary: reportData.clinicalSummary || "",
+    relevantCondition: reportData.relevantCondition || null,
+    fileType: reportData.fileType || "PDF",
+    status: reportData.status || "private", // private, ai_shared, hospital_shared
+    activeGrant: null,
+    createdAt: new Date().toISOString()
+  };
+
+  user.medicalReports.unshift(newReport);
+  updateUser(userId, { medicalReports: user.medicalReports });
+  return newReport;
+}
+
+export function deleteUserReport(userId, reportId) {
+  const user = findUserById(userId);
+  if (!user || !user.medicalReports) return false;
+  const filtered = user.medicalReports.filter(r => r.id !== reportId);
+  user.medicalReports = filtered;
+  updateUser(userId, { medicalReports: filtered });
+  return true;
+}
+
+export function grantReportAccess(userId, reportId, { recipientHospitalId, recipientHospitalName, durationMinutes = 30 }) {
+  const user = findUserById(userId);
+  if (!user || !user.medicalReports) return null;
+  const reportIndex = user.medicalReports.findIndex(r => r.id === reportId);
+  if (reportIndex === -1) return null;
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + durationMinutes * 60 * 1000);
+  const nonce = Math.random().toString(36).substring(2, 10).toUpperCase();
+  const grantToken = `MS-CONSENT-${nonce}-${Date.now().toString(36).toUpperCase()}`;
+
+  const grant = {
+    grantId: `grant_${Date.now()}`,
+    grantToken,
+    recipientHospitalId: recipientHospitalId || "all_verified",
+    recipientHospitalName: recipientHospitalName || "Authorized Clinical Provider",
+    grantedAt: now.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    durationMinutes,
+    status: "active"
+  };
+
+  user.medicalReports[reportIndex].status = "hospital_shared";
+  user.medicalReports[reportIndex].activeGrant = grant;
+  updateUser(userId, { medicalReports: user.medicalReports });
+
+  return grant;
+}
+
+export function revokeReportAccess(userId, reportId) {
+  const user = findUserById(userId);
+  if (!user || !user.medicalReports) return false;
+  const reportIndex = user.medicalReports.findIndex(r => r.id === reportId);
+  if (reportIndex === -1) return false;
+
+  user.medicalReports[reportIndex].status = "private";
+  user.medicalReports[reportIndex].activeGrant = null;
+  updateUser(userId, { medicalReports: user.medicalReports });
   return true;
 }
 

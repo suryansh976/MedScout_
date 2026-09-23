@@ -21,7 +21,12 @@ import {
   addSavedHospital,
   removeSavedHospital,
   addSavedComparison,
-  removeSavedComparison
+  removeSavedComparison,
+  getUserReports,
+  addUserReport,
+  deleteUserReport,
+  grantReportAccess,
+  revokeReportAccess
 } from "../data/usersStore.js";
 import { authenticateToken } from "../middleware/auth.js";
 
@@ -171,6 +176,80 @@ router.delete("/saved-comparisons/:id", (req, res) => {
     return res.status(404).json({ success: false, error: "User not found." });
   }
   res.json({ success: true, message: "Comparison removed from saved list." });
+});
+
+// ─── Medical Reports (Smart Health Card) ─────────────────────────────────────
+
+// GET /api/user/reports - list reports
+router.get("/reports", (req, res) => {
+  const reports = getUserReports(req.user.id);
+  res.json({
+    success: true,
+    total: reports.length,
+    data: reports
+  });
+});
+
+// POST /api/user/reports - upload / add new report
+router.post("/reports", (req, res) => {
+  const { title, category, reportDate, provider, clinicalSummary, relevantCondition, fileType } = req.body;
+  if (!title) {
+    return res.status(400).json({ success: false, error: "Report title is required." });
+  }
+
+  const newReport = addUserReport(req.user.id, {
+    title,
+    category,
+    reportDate,
+    provider,
+    clinicalSummary,
+    relevantCondition,
+    fileType
+  });
+
+  if (!newReport) {
+    return res.status(404).json({ success: false, error: "User not found." });
+  }
+
+  res.status(201).json({ success: true, data: newReport });
+});
+
+// DELETE /api/user/reports/:id - delete report
+router.delete("/reports/:id", (req, res) => {
+  const removed = deleteUserReport(req.user.id, req.params.id);
+  if (!removed) {
+    return res.status(404).json({ success: false, error: "Report not found." });
+  }
+  res.json({ success: true, message: "Medical report permanently removed." });
+});
+
+// POST /api/user/reports/:id/share - generate temporary consent grant
+router.post("/reports/:id/share", (req, res) => {
+  const { recipientHospitalId, recipientHospitalName, durationMinutes } = req.body;
+  const grant = grantReportAccess(req.user.id, req.params.id, {
+    recipientHospitalId,
+    recipientHospitalName,
+    durationMinutes: Number(durationMinutes) || 30
+  });
+
+  if (!grant) {
+    return res.status(404).json({ success: false, error: "Report not found." });
+  }
+
+  res.json({
+    success: true,
+    data: grant,
+    message: `Secure consent token generated for ${durationMinutes || 30} minutes.`
+  });
+});
+
+// DELETE /api/user/reports/:id/revoke - revoke consent
+router.delete("/reports/:id/revoke", (req, res) => {
+  const revoked = revokeReportAccess(req.user.id, req.params.id);
+  if (!revoked) {
+    return res.status(404).json({ success: false, error: "Report not found." });
+  }
+  res.json({ success: true, message: "Hospital access grant revoked." });
 });
 
 export default router;

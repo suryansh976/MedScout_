@@ -22,11 +22,11 @@ export default function Navbar({ activeTab, setActiveTab, queuedCount, onOpenCom
             onClick={() => setActiveTab("discovery")} 
             className="flex items-center gap-3 text-left group focus:outline-none"
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-container flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform">
               <Activity className="w-5 h-5" />
             </div>
             <div className="flex flex-col">
-              <span className="font-display text-lg font-bold text-on-surface leading-tight tracking-tight">
+              <span className="font-display text-lg font-bold text-red-700 leading-tight tracking-tight">
                 MedScout
               </span>
               <span className="text-[10px] text-secondary uppercase font-bold tracking-widest">

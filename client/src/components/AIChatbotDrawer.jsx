@@ -21,13 +21,18 @@ import {
   IndianRupee,
   Layers,
   Mic,
-  MicOff
+  MicOff,
+  Paperclip
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 
 export default function AIChatbotDrawer({
   isOpen,
   onClose,
+  initialPrompt,
+  initialReport,
+  onClearInitialPrompt,
+  initialLocation,
   onApplyExtractedFilters,
   onViewHospital,
   onQueueHospital
@@ -63,8 +68,11 @@ export default function AIChatbotDrawer({
   const [isListening, setIsListening] = useState(false);
   const [aiStatus, setAiStatus] = useState(null);
   const [showMemoryPanel, setShowMemoryPanel] = useState(false);
+  const [attachedReport, setAttachedReport] = useState(null);
+  const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
+  const lastExecutedPromptRef = useRef("");
 
   const requestLocation = () => {
     if (!navigator.geolocation) {
@@ -126,8 +134,6 @@ export default function AIChatbotDrawer({
     setIsListening(true);
   };
 
-  if (!isOpen) return null;
-
   const handleResetMemory = () => {
     const emptyState = {
       context: {},
@@ -154,13 +160,20 @@ export default function AIChatbotDrawer({
     ]);
   };
 
-  const handleSend = async (textToSend) => {
+  const handleSend = async (textToSend, reportToSend = attachedReport) => {
     const text = textToSend || input;
-    if (!text.trim() || loading) return;
+    const report = reportToSend;
+    if ((!text.trim() && !report) || loading) return;
 
-    const userMessage = { role: "user", content: text };
+    const messageContent = text.trim() || `Uploaded medical report: ${report?.name}`;
+    const userMessage = { 
+      role: "user", 
+      content: messageContent,
+      attachedReport: report ? { name: report.name, size: report.size, type: report.type } : null
+    };
     setMessages(prev => [...prev, userMessage]);
     if (!textToSend) setInput("");
+    setAttachedReport(null);
     setLoading(true);
 
     try {
@@ -168,7 +181,8 @@ export default function AIChatbotDrawer({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: text,
+          message: messageContent,
+          report: report ? { name: report.name, size: report.size, type: report.type } : null,
           sessionState: sessionState
         })
       });
@@ -225,6 +239,39 @@ export default function AIChatbotDrawer({
     }
   };
 
+  // Sync initial location to session state if available
+  useEffect(() => {
+    if (initialLocation && initialLocation !== "All India") {
+      setSessionState(prev => {
+        if (!prev.context?.location) {
+          return {
+            ...prev,
+            context: {
+              ...prev.context,
+              location: initialLocation,
+              locationPermission: "granted"
+            }
+          };
+        }
+        return prev;
+      });
+    }
+  }, [initialLocation]);
+
+  // Automatically execute natural language AI analysis when opened with an initialPrompt or initialReport
+  useEffect(() => {
+    if (isOpen && (initialPrompt || initialReport)) {
+      const query = (initialPrompt || "").trim();
+      const reportName = initialReport?.name || "";
+      const comboKey = `${query}:::${reportName}`;
+      if (comboKey && lastExecutedPromptRef.current !== comboKey) {
+        lastExecutedPromptRef.current = comboKey;
+        if (onClearInitialPrompt) onClearInitialPrompt();
+        handleSend(query, initialReport);
+      }
+    }
+  }, [isOpen, initialPrompt, initialReport]);
+
   // Active preferences count
   const activePrefsCount = [
     sessionState.context?.disease,
@@ -235,6 +282,8 @@ export default function AIChatbotDrawer({
     sessionState.preferences?.distanceFlexibility === "flexible" ? "Travel Flexible" : null,
     sessionState.preferences?.ownershipPreference !== "any" ? sessionState.preferences?.ownershipPreference : null
   ].filter(Boolean).length;
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[500px] lg:w-[580px] bg-surface shadow-2xl flex flex-col border-l border-surface-container-high animate-in slide-in-from-right duration-300">
@@ -364,6 +413,17 @@ export default function AIChatbotDrawer({
                   : "bg-white text-on-surface border border-surface-container-high rounded-bl-none"
               }`}
             >
+              {/* Attached Report Tag inside Message */}
+              {msg.attachedReport && (
+                <div className={`mb-2.5 p-2 rounded-xl flex items-center gap-2 text-xs font-semibold ${
+                  msg.role === "user" ? "bg-white/20 text-white border border-white/30" : "bg-sky-50 text-sky-800 border border-sky-200"
+                }`}>
+                  <FileText className="w-4 h-4 shrink-0 text-cyan-200" />
+                  <span className="truncate max-w-[200px]">{msg.attachedReport.name}</span>
+                  <span className="text-[10px] opacity-80">({(msg.attachedReport.size / 1024).toFixed(0)} KB)</span>
+                </div>
+              )}
+
               {/* Emergency Alert */}
               {msg.isEmergency && (
                 <div className="flex items-center gap-2 text-danger font-bold text-xs uppercase mb-2">
@@ -411,6 +471,9 @@ export default function AIChatbotDrawer({
                       <tbody className="divide-y divide-surface-container-high/70">
                         {[
                           ["Ownership", hospital => hospital.ownership],
+                          ["Subsidy Available", hospital => hospital.subsidyAvailable ? `✅ Yes (${hospital.subsidyType || "PM-JAY / Govt"})` : "❌ No (Private only)"],
+                          ["Cost WITH Subsidy", hospital => hospital.costWithSubsidy || (hospital.subsidyAvailable ? "₹0 (Cashless PM-JAY)" : "Full private tariff")],
+                          ["Cost WITHOUT Subsidy", hospital => hospital.costWithoutSubsidy || hospital.costRange || "Standard tariff"],
                           ["Annual volume", hospital => hospital.annualVolume ? `${hospital.annualVolume.toLocaleString("en-IN")} cases` : "Unavailable"],
                           ["30-day mortality", hospital => hospital.mortalityRate !== null ? `${hospital.mortalityRate}%` : "Unavailable"],
                           ["Documented cost", hospital => hospital.costRange],
@@ -633,6 +696,19 @@ export default function AIChatbotDrawer({
       <div className="px-4 py-2 bg-surface-container-low border-t border-surface-container-high flex items-center gap-1.5 overflow-x-auto text-[11px] whitespace-nowrap">
         <span className="text-tertiary font-semibold">Try:</span>
         <button
+          onClick={() => handleSend("run audit text")}
+          className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-900 font-semibold hover:bg-emerald-100 transition-colors flex items-center gap-1"
+        >
+          <ShieldCheck className="w-3 h-3 text-emerald-600" />
+          <span>Run Audit Text</span>
+        </button>
+        <button
+          onClick={() => handleSend("compare hospitals on the basis of subsidy with or without subsidy available")}
+          className="px-2.5 py-1 rounded-full bg-amber-50 border border-amber-300 text-amber-900 font-semibold hover:bg-amber-100 transition-colors"
+        >
+          Compare Subsidy Options
+        </button>
+        <button
           onClick={() => handleSend("I care more about treatment success rate than distance.")}
           className="px-2.5 py-1 rounded-full bg-white border border-surface-container-high text-on-surface hover:bg-surface-container transition-colors"
         >
@@ -666,6 +742,28 @@ export default function AIChatbotDrawer({
 
       {/* Input Form */}
       <div className="p-4 bg-white border-t border-surface-container-high">
+        {/* Attached Report Preview Chip */}
+        {attachedReport && (
+          <div className="flex items-center justify-between p-2 px-3 rounded-xl bg-sky-50 dark:bg-sky-950/50 border border-sky-200 dark:border-sky-800 text-sky-900 dark:text-sky-200 text-xs mb-2 animate-in fade-in">
+            <div className="flex items-center gap-2 min-w-0">
+              <FileText className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+              <span className="font-semibold truncate max-w-[220px]">{attachedReport.name}</span>
+              <span className="text-[10px] text-sky-600 dark:text-sky-400">({(attachedReport.size / 1024).toFixed(0)} KB)</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setAttachedReport(null);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+              }}
+              className="text-sky-600 hover:text-red-600 p-1"
+              title="Remove report"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -674,10 +772,36 @@ export default function AIChatbotDrawer({
           className="flex items-center gap-2"
         >
           <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                setAttachedReport({
+                  name: file.name,
+                  size: file.size,
+                  type: file.type || "application/pdf"
+                });
+              }
+            }}
+          />
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            title="Upload Medical Report / Discharge Summary / Lab Test"
+            className="p-2.5 rounded-xl border border-surface-container-high bg-surface-container-low text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors"
+          >
+            <Paperclip className="w-4 h-4" />
+          </button>
+
+          <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type condition, budget, or preferences (e.g. success rate > distance)..."
+            placeholder={attachedReport ? `Add instructions for ${attachedReport.name}...` : "Type condition, budget, or preferences (e.g. success rate > distance)..."}
             className="flex-1 py-2.5 px-3.5 rounded-xl bg-surface-container-low border border-surface-container-high text-xs sm:text-sm text-on-surface placeholder:text-outline focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary/20"
           />
           <button
@@ -692,7 +816,7 @@ export default function AIChatbotDrawer({
           </button>
           <button
             type="submit"
-            disabled={!input.trim() || loading}
+            disabled={(!input.trim() && !attachedReport) || loading}
             className="p-2.5 rounded-xl bg-primary hover:bg-primary-dark disabled:opacity-50 text-white transition-colors"
           >
             <Send className="w-4 h-4" />

@@ -46,4 +46,13 @@ const emergency = turn("My face is drooping and speech is slurred");
 assert.equal(emergency.isEmergency, true);
 assert.match(emergency.content, /108|112/);
 
-console.log("Chatbot audit passed: clarification, location, patient context, significance, comparison, and emergency flows.");
+const auditTurn = turn("run audit text");
+assert.equal(auditTurn.role, "assistant");
+assert.match(auditTurn.content, /Statutory Clinical Audit Report/i);
+assert.ok(auditTurn.sources.length > 0, "audit response should provide verifiable statutory sources");
+
+const subsidyTurn = turn("is subsidy available for heart bypass surgery");
+assert.equal(subsidyTurn.role, "assistant");
+assert.match(subsidyTurn.content, /subsidy/i);
+
+console.log("Chatbot audit passed: clarification, location, patient context, significance, comparison, emergency, audit text, and subsidy flows.");

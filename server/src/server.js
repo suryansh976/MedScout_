@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 5000;
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGIN || "http://localhost:5173",
+  origin: process.env.ALLOWED_ORIGIN || "http://localhost:3000",
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
@@ -92,8 +92,9 @@ const server = app.listen(PORT, () => {
 
 server.on("error", error => {
   if (error.code === "EADDRINUSE") {
-    console.error(`MedScout API could not start: port ${PORT} is already in use.`);
-    console.error(`The existing service may already be running, or start this instance with PORT=5001 npm start.`);
+    console.error(`MedScout API is already running or another process owns port ${PORT}.`);
+    console.error(`Check http://localhost:${PORT}/health before starting another instance.`);
+    console.error(`To use another port in PowerShell: $env:PORT=5001; npm start`);
     process.exitCode = 1;
     return;
   }

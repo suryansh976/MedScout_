@@ -42,23 +42,48 @@ function enrichHospital(hosp, diseaseId = "dis_cabg", treatmentId = "trt_cabg_on
 
 // 1. GET /api/hospitals - list and filter
 router.get("/hospitals", (req, res) => {
-  const { disease, treatment, maxBudget, accreditation, query } = req.query;
+  const { disease, treatment, maxBudget, accreditation, query, location, speciality, maxDistance, sortBy } = req.query;
   const matchedDisease = disease && seedData.diseases.find(item =>
     item.id === disease || item.name.toLowerCase() === disease.toLowerCase()
   );
   const diseaseId = matchedDisease?.id || disease;
 
   let results = hospitalsState
-    .filter(h => !diseaseId || h.supportedDiseaseIds?.includes(diseaseId))
+    .filter(h => !diseaseId || h.supportedDiseaseIds?.includes(diseaseId) || !h.supportedDiseaseIds)
     .map(h => enrichHospital(h, diseaseId || "dis_cabg", treatment || "trt_cabg_onpump"));
 
   if (query) {
     const q = query.toLowerCase();
     results = results.filter(h =>
       h.canonicalName.toLowerCase().includes(q) ||
-      h.locationName.toLowerCase().includes(q) ||
-      h.specialities.some(s => s.toLowerCase().includes(q))
+      (h.locationName || "").toLowerCase().includes(q) ||
+      (h.city || "").toLowerCase().includes(q) ||
+      (h.specialities || []).some(s => s.toLowerCase().includes(q))
     );
+  }
+
+  if (location) {
+    const loc = location.toLowerCase();
+    results = results.filter(h =>
+      (h.locationName || "").toLowerCase().includes(loc) ||
+      (h.city || "").toLowerCase().includes(loc) ||
+      (h.state || "").toLowerCase().includes(loc)
+    );
+  }
+
+  if (speciality) {
+    const spec = speciality.toLowerCase();
+    results = results.filter(h =>
+      (h.specialities || []).some(s => s.toLowerCase().includes(spec)) ||
+      (h.specialityFocus || "").toLowerCase().includes(spec)
+    );
+  }
+
+  if (maxDistance) {
+    const distanceLimit = Number(maxDistance);
+    if (!Number.isNaN(distanceLimit)) {
+      results = results.filter(h => Number(h.distanceKm || 9999) <= distanceLimit);
+    }
   }
 
   if (maxBudget) {
@@ -68,15 +93,33 @@ router.get("/hospitals", (req, res) => {
 
   if (accreditation && accreditation !== "all") {
     results = results.filter(h =>
-      h.accreditationTier.toLowerCase().includes(accreditation.toLowerCase()) ||
-      h.accreditations.some(a => a.toLowerCase().includes(accreditation.toLowerCase()))
+      (h.accreditationTier || "").toLowerCase().includes(accreditation.toLowerCase()) ||
+      (h.accreditations || []).some(a => a.toLowerCase().includes(accreditation.toLowerCase()))
     );
   }
 
+  const sortKey = String(sortBy || "successRate").toLowerCase();
+  const sortedResults = [...results].sort((a, b) => {
+    if (sortKey === "distance") return Number(a.distanceKm || 9999) - Number(b.distanceKm || 9999);
+    if (sortKey === "cost") {
+      const costA = a.cost ? Number(a.cost.averageAmount || a.cost.maxAmount || 0) : Number.MAX_SAFE_INTEGER;
+      const costB = b.cost ? Number(b.cost.averageAmount || b.cost.maxAmount || 0) : Number.MAX_SAFE_INTEGER;
+      return costA - costB;
+    }
+    if (sortKey === "specialist") {
+      const aMatch = (a.specialities || []).length + (a.specialityFocus ? 1 : 0);
+      const bMatch = (b.specialities || []).length + (b.specialityFocus ? 1 : 0);
+      return bMatch - aMatch;
+    }
+    const aScore = Number(a.successRate || a.confidenceScore || 0);
+    const bScore = Number(b.successRate || b.confidenceScore || 0);
+    return bScore - aScore;
+  });
+
   res.json({
     success: true,
-    total: results.length,
-    data: results
+    total: sortedResults.length,
+    data: sortedResults
   });
 });
 
@@ -164,7 +207,7 @@ router.post("/compare", (req, res) => {
 // 6. POST /api/chat - AI Chatbot reasoning turn (with session state)
 // Session state is maintained client-side and passed back each turn
 router.post("/chat", async (req, res) => {
-  const { message, sessionState } = req.body;
+  const { message, sessionState, report } = req.body;
   if (!message || !message.trim()) {
     return res.status(400).json({ success: false, error: "Message is required" });
   }
@@ -179,10 +222,14 @@ router.post("/chat", async (req, res) => {
     ...(sessionState || {}),
     context: {
       ...profileContext,
-      ...(sessionState?.context || {})
+      ...(sessionState?.context || {}),
+      ...(report ? { medicalReport: report } : {})
     }
   };
   const localReply = processChatMessage(message, mergedSessionState);
+  if (report && !localReply.personalizationNote) {
+    localReply.personalizationNote = `Analyzed uploaded report: ${report.name} (${Math.round((report.size || 0) / 1024)} KB)`;
+  }
   const botReply = await enhanceWithOpenAI({ message: message.trim(), localResponse: localReply });
   res.json({
     success: true,
