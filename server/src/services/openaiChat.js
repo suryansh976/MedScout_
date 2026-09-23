@@ -51,7 +51,7 @@ export function getAIStatus() {
 
 export async function enhanceWithOpenAI({ message, localResponse }) {
   const config = getOpenAIConfig();
-  if (!config || localResponse.isEmergency) return localResponse;
+  if (!config || localResponse.isEmergency || localResponse.isError) return localResponse;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);

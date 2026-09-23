@@ -27,6 +27,26 @@ const EMERGENCY_PATTERNS = [
   "rigid abdomen", "high fever and lethargy"
 ];
 
+const NON_MEDICAL_PATTERNS = [
+  // Coding / Tech
+  /\b(python|javascript|typescript|c\+\+|java\b|html|css|sql|github|git\b|debug|syntax|programming|write code|coding|script|algorithm|regex|react|node\.?js|api endpoint)\b/i,
+  // Weather / Geography / Trivia
+  /\b(weather|temperature|forecast|rain\b|climate|capital of|president of|prime minister of|who is the pm|who is president|population of|currency of)\b/i,
+  // Sports
+  /\b(cricket|football|soccer|ipl|world cup|match score|fifa|basketball|nba|tennis|olympics|messi|ronaldo|virat kohli)\b/i,
+  // Entertainment / Media
+  /\b(movie|movies|film|cinema|actor|actress|hollywood|bollywood|song|music|singer|lyrics|netflix|spotify|youtube)\b/i,
+  // Jokes / Banter / Casual chit-chat
+  /\b(tell me a joke|tell a joke|funny joke|make me laugh|are you single|marry me|i love you|who created you|sing a song|write a poem|write a story)\b/i,
+  // Commerce / Finance / Non-medical products
+  /\b(bitcoin|crypto|cryptocurrency|ethereum|stock market|share market|forex|invest in stocks|buy shoes|iphone|samsung galaxy|laptop price)\b/i,
+  // Cooking / Recipes
+  /\b(recipe|how to cook|how to bake|ingredients for|biryani|pasta|pizza|burger)\b/i,
+  // Math / Academics
+  /\b(solve equation|math homework|what is 2\s*\+\s*2|integral of|derivative of|write an essay on)\b/i
+];
+
+
 const DATA_CONFIDENCE_LEVELS = {
   VERIFIED_PRIMARY: { label: "Verified (Primary Source)", color: "success", description: "Directly from statutory government return or accredited audit body" },
   VERIFIED_SECONDARY: { label: "Verified (Secondary)", color: "success", description: "Cross-verified against multiple independent registry sources" },
@@ -110,7 +130,9 @@ const LOCATION_SYNONYMS = {
   "gurgaon": "Gurugram NCR", "gurugram": "Gurugram NCR", "noida": "Noida NCR",
   "chandigarh": "Chandigarh", "jalandhar": "Jalandhar", "mumbai": "Mumbai",
   "bangalore": "Bangalore", "bengaluru": "Bangalore", "chennai": "Chennai",
-  "kolkata": "Kolkata", "hyderabad": "Hyderabad", "pune": "Pune"
+  "kolkata": "Kolkata", "hyderabad": "Hyderabad", "pune": "Pune",
+  "jaipur": "Jaipur", "lucknow": "Lucknow", "patna": "Patna", "shimla": "Shimla",
+  "ludhiana": "Ludhiana", "patiala": "Patiala", "ahmedabad": "Ahmedabad", "kochi": "Kochi"
 };
 
 const FACILITY_KEYWORDS = [
@@ -433,6 +455,14 @@ function normalizeSessionState(rawState = {}) {
     comparisonMode: rawState.comparisonMode ?? rawState.context?.comparisonMode ?? false,
     locationPermission: rawState.locationPermission || rawState.context?.locationPermission || "unknown",
     patientType: rawState.patientType || rawState.context?.patientType || null,
+    patientRelationship: rawState.patientRelationship || rawState.context?.patientRelationship || null,
+    patientAge: rawState.patientAge ?? rawState.context?.patientAge ?? null,
+    patientGender: rawState.patientGender || rawState.context?.patientGender || null,
+    comorbidities: Array.isArray(rawState.comorbidities) ? rawState.comorbidities : (rawState.context?.comorbidities || []),
+    diseaseSeverity: rawState.diseaseSeverity || rawState.context?.diseaseSeverity || null,
+    diseaseDuration: rawState.diseaseDuration || rawState.context?.diseaseDuration || null,
+    diagnosticReports: Array.isArray(rawState.diagnosticReports) ? rawState.diagnosticReports : (rawState.context?.diagnosticReports || []),
+    subsidyStatus: rawState.subsidyStatus || rawState.context?.subsidyStatus || null,
     ageGroup: rawState.ageGroup || rawState.context?.ageGroup || null,
     urgency: rawState.urgency || rawState.context?.urgency || null,
     carePreference: rawState.carePreference || rawState.context?.carePreference || null,
@@ -527,15 +557,102 @@ function extractContextAndPreferences(message, sessionState = {}) {
     }
   }
 
-  // 4b. High-value, non-diagnostic user context
-  if (/\b(child|kid|son|daughter|paediatric|pediatric)\b/i.test(msg)) context.patientType = "child";
-  else if (/\b(parent|father|mother|elderly|senior)\b/i.test(msg)) context.patientType = "adult_dependent";
-  else if (/\b(myself|me|i need|for me)\b/i.test(msg)) context.patientType = "self";
+  // 4b. High-value, patient & disease clinical details
+  if (/\b(child|kid|son|daughter|paediatric|pediatric)\b/i.test(msg)) {
+    context.patientType = "child";
+    if (/\b(son)\b/i.test(msg)) context.patientRelationship = "Son";
+    else if (/\b(daughter)\b/i.test(msg)) context.patientRelationship = "Daughter";
+    else context.patientRelationship = "Child";
+  } else if (/\b(parent|father|mother|dad|mom|elderly|senior)\b/i.test(msg)) {
+    context.patientType = "adult_dependent";
+    if (/\b(father|dad)\b/i.test(msg)) context.patientRelationship = "Father";
+    else if (/\b(mother|mom)\b/i.test(msg)) context.patientRelationship = "Mother";
+    else context.patientRelationship = "Parent";
+  } else if (/\b(husband|wife|spouse)\b/i.test(msg)) {
+    context.patientType = "adult_dependent";
+    if (/\b(husband)\b/i.test(msg)) context.patientRelationship = "Husband";
+    else if (/\b(wife)\b/i.test(msg)) context.patientRelationship = "Wife";
+    else context.patientRelationship = "Spouse";
+  } else if (/\b(myself|me|i need|for me|my treatment|my case)\b/i.test(msg)) {
+    context.patientType = "self";
+    context.patientRelationship = "Self";
+  }
 
-  if (/\b(infant|baby|newborn)\b/i.test(msg)) context.ageGroup = "infant";
-  else if (/\b(child|kid|teen|adolescent)\b/i.test(msg)) context.ageGroup = "child";
-  else if (/\b(senior|elderly|older adult)\b/i.test(msg)) context.ageGroup = "older_adult";
-  else if (/\b(adult|grown-up)\b/i.test(msg)) context.ageGroup = "adult";
+  // Patient Age Extraction
+  const ageMatch = msg.match(/\b(?:age\s*[:=]?\s*|aged\s+)?(\d{1,2})[\s-]*(?:years?(?:[\s-]old)?|yrs?(?:[\s-]old)?|yr|yo)\b/i) ||
+                   msg.match(/\baged\s+(\d{1,2})\b/i);
+  if (ageMatch) {
+    const ageVal = parseInt(ageMatch[1], 10);
+    context.patientAge = ageVal;
+    if (ageVal >= 60) context.ageGroup = "older_adult";
+    else if (ageVal < 18) {
+      context.ageGroup = "child";
+      context.patientType = "child";
+    } else {
+      context.ageGroup = "adult";
+    }
+  }
+
+  if (!context.ageGroup) {
+    if (/\b(infant|baby|newborn)\b/i.test(msg)) context.ageGroup = "infant";
+    else if (/\b(child|kid|teen|adolescent)\b/i.test(msg)) context.ageGroup = "child";
+    else if (/\b(senior|elderly|older adult|geriatric)\b/i.test(msg)) context.ageGroup = "older_adult";
+    else if (/\b(adult|grown-up)\b/i.test(msg)) context.ageGroup = "adult";
+  }
+
+  // Patient Comorbidities Extraction
+  if (!Array.isArray(context.comorbidities)) context.comorbidities = [];
+  if (/\b(diabet(?:ic|es)|sugar problem|high blood sugar)\b/i.test(msg) && !context.comorbidities.includes("Diabetes")) {
+    context.comorbidities.push("Diabetes");
+  }
+  if (/\b(hypertens(?:ion|ive)|high bp|high blood pressure)\b/i.test(msg) && !context.comorbidities.includes("Hypertension")) {
+    context.comorbidities.push("Hypertension");
+  }
+  if (/\b(heart patient|cardiac history|previous attack|stented|pacemaker)\b/i.test(msg) && !context.comorbidities.includes("Cardiac History")) {
+    context.comorbidities.push("Cardiac History");
+  }
+  if (/\b(kidney problem|creatinine|renal impairment)\b/i.test(msg) && !context.comorbidities.includes("Renal Impairment")) {
+    context.comorbidities.push("Renal Impairment");
+  }
+  if (/\b(asthma|asthmatic|copd)\b/i.test(msg) && !context.comorbidities.includes("Asthma / COPD")) {
+    context.comorbidities.push("Asthma / COPD");
+  }
+
+  // Disease Severity / Stage Extraction
+  const stageMatch = msg.match(/\b(stage\s*(?:[1-4]|iv|iii|ii|i)|early stage|advanced stage|metastatic)\b/i);
+  if (stageMatch) {
+    context.diseaseSeverity = stageMatch[0].toUpperCase();
+  } else if (/\b(triple vessel|triple-vessel|3 vessel)\b/i.test(msg)) {
+    context.diseaseSeverity = "Triple Vessel CAD";
+  } else if (/\b(double vessel|double-vessel|2 vessel)\b/i.test(msg)) {
+    context.diseaseSeverity = "Double Vessel CAD";
+  } else if (/\b(single vessel|single-vessel)\b/i.test(msg)) {
+    context.diseaseSeverity = "Single Vessel CAD";
+  } else if (/\b(severe|mild|moderate|acute|chronic|critical)\b/i.test(msg)) {
+    const sevMatch = msg.match(/\b(severe|mild|moderate|acute|chronic|critical)\b/i)[0];
+    context.diseaseSeverity = sevMatch.charAt(0).toUpperCase() + sevMatch.slice(1);
+  }
+
+  // Diagnostic Reports Extraction
+  if (!Array.isArray(context.diagnosticReports)) context.diagnosticReports = [];
+  if (/\b(angio(?:graphy)?)\b/i.test(msg) && !context.diagnosticReports.includes("Angiography")) context.diagnosticReports.push("Angiography");
+  if (/\b(biopsy)\b/i.test(msg) && !context.diagnosticReports.includes("Biopsy")) context.diagnosticReports.push("Biopsy");
+  if (/\b(mri)\b/i.test(msg) && !context.diagnosticReports.includes("MRI")) context.diagnosticReports.push("MRI");
+  if (/\b(ct scan|ct)\b/i.test(msg) && !context.diagnosticReports.includes("CT Scan")) context.diagnosticReports.push("CT Scan");
+  if (/\b(pet scan)\b/i.test(msg) && !context.diagnosticReports.includes("PET Scan")) context.diagnosticReports.push("PET Scan");
+  if (/\b(echo(?:cardiogram)?)\b/i.test(msg) && !context.diagnosticReports.includes("Echocardiogram")) context.diagnosticReports.push("Echocardiogram");
+  if (/\b(blood test|kft|lft|creatinine)\b/i.test(msg) && !context.diagnosticReports.includes("Blood / Lab Tests")) context.diagnosticReports.push("Blood / Lab Tests");
+
+  // Subsidy / Insurance Status Extraction
+  if (/\b(ayushman|pm-?jay|pmjay|golden card)\b/i.test(msg)) {
+    context.subsidyStatus = "PM-JAY Ayushman Cardholder (100% Cashless)";
+    context.governmentScheme = "scheme_pmjay";
+  } else if (/\b(cghs)\b/i.test(msg)) {
+    context.subsidyStatus = "CGHS Empanelled Rate";
+    context.governmentScheme = "scheme_cghs";
+  } else if (/\b(cashless|tpa|private insurance|mediclaim|star health|hdfc ergo)\b/i.test(msg)) {
+    context.subsidyStatus = "Private Cashless Insurance";
+  }
 
   if (/\b(today|urgent|urgently|soon|this week|asap|immediately)\b/i.test(msg)) context.urgency = "soon";
   else if (/\b(planned|elective|not urgent|routine|later|in future)\b/i.test(msg)) context.urgency = "planned";
@@ -929,20 +1046,34 @@ function getNextRequiredQuestion(context) {
     if (!context.askedAbout.includes("disease")) {
       return {
         topic: "disease",
-        text: "To find the best hospitals for you, I first need to know: **what condition or treatment are you looking for?**\n\nYou can describe it in your own words — for example: 'heart bypass surgery', 'knee replacement', 'kidney dialysis', 'cancer treatment', or just the body part affected. I won't diagnose you; I'll use this only to match verified hospital records."
+        text: "To find the best hospitals for you, I first need to know: **what condition, disease, or treatment are you looking for?**\n\n*(Note: MedScout is strictly limited to medical conditions and hospital matching).*\n\nYou can describe it in your own words — for example: 'heart bypass surgery', 'knee replacement', 'kidney dialysis', 'cancer treatment', or the symptoms you are experiencing. I won't diagnose you; I'll use this only to match verified hospital records."
       };
     }
     // Already asked, accept vague and proceed with speciality
     return null;
   }
 
-  // Step 2: Must know location (ask together with budget)
+  // Step 2: Must know location (ask together with details regarding person and disease)
   if (!context.location) {
     if (!context.askedAbout.includes("location")) {
       const diseaseName = context.disease || context.speciality || "this condition";
+      const hasPersonDetails = Boolean(context.patientRelationship || context.patientAge || context.patientType);
+      const hasDiseaseDetails = Boolean(context.diseaseSeverity || (context.diagnosticReports && context.diagnosticReports.length > 0));
+
+      let text = `Great — I'm looking for accredited hospitals for **${diseaseName}**.\n\nTo ensure clinically accurate matching, please share key details regarding the **person and the disease**:\n\n📍 **1. City / Location (Required):**\n• **Which city or area** should I search? (e.g., Delhi NCR, Mumbai, Chandigarh, Bangalore)\n• Approximate budget or government scheme (e.g., Ayushman Bharat PM-JAY / CGHS / Private)?`;
+
+      if (!hasPersonDetails) {
+        text += `\n\n👤 **2. Details Regarding the Person:**\n• Who is the patient (e.g., father, mother, child, or self) and approximate age?\n• Any other health conditions or comorbidities (e.g., diabetes, high BP, cardiac history)?`;
+      }
+      if (!hasDiseaseDetails) {
+        text += `\n\n🩺 **3. Details Regarding the Disease:**\n• Current stage, severity, or duration (e.g., acute, chronic, mild, severe)?\n• Any diagnostic reports already conducted (biopsy, scans, angiography, lab tests)?`;
+      }
+
+      text += `\n\n*(You can reply with your preferred **city or area** to proceed immediately, or include patient/disease details for personalized matching).*`;
+
       return {
         topic: "location",
-        text: `Great — I'm looking for hospitals that specialize in **${diseaseName}**.\n\nTwo quick things to personalize your results:\n\n1. **Which city or area** should I search? (e.g., Delhi, Mumbai, Chandigarh, Bangalore)\n2. **What's your approximate budget?** (optional — e.g., '5 lakh', '3-4 lakh', or 'no limit')\n\nYou can skip the budget if you prefer.`
+        text
       };
     }
     return null;
@@ -951,9 +1082,10 @@ function getNextRequiredQuestion(context) {
   // Step 3: Must know urgency / planned timing before showing results
   if (!context.urgency) {
     if (!context.askedAbout.includes("urgency")) {
+      const diseaseName = context.disease || context.speciality || "this condition";
       return {
         topic: "urgency",
-        text: "One more quick detail to rank results accurately: **Is this treatment planned, needed soon, or urgent?**"
+        text: `One more quick detail to rank results accurately for **${diseaseName}** in **${context.location}**:\n\n⏱️ **Timing & Urgency:**\n• **Is this treatment planned, needed soon, or urgent?**\n\n👤 **Person & Care Profile (if not provided):**\n• Patient age group: **Adult**, **Elderly**, or **Child**?\n• Any subsidy card: **PM-JAY Ayushman Card (100% Cashless)**, CGHS, or Private Insurance?\n\n*(Please specify whether treatment is **planned, needed soon, or urgent**).*`
       };
     }
     return null;
@@ -968,11 +1100,15 @@ function getNextRequiredQuestion(context) {
  * These enrich the results but don't block the hospital display.
  */
 function getOptionalFollowUp(context) {
-  if (!context.patientType && !context.urgency && !context.askedAbout.includes("urgency")) {
-    return "To refine this further: **Is this for you or someone else**, and **is it urgent or planned**? (You can skip this.)";
+  const missingPrompts = [];
+  if (!context.diseaseSeverity && (!context.diagnosticReports || context.diagnosticReports.length === 0)) {
+    missingPrompts.push("share recent diagnostic reports (e.g. angiography, biopsy, scans) or confirmed disease severity");
   }
-  if (!context.urgency && !context.askedAbout.includes("urgency") && context.patientType) {
-    return "One more thing — **is this treatment urgent or planned**? This helps me highlight which hospitals you should contact right away.";
+  if ((!context.comorbidities || context.comorbidities.length === 0) && !context.patientAge) {
+    missingPrompts.push("mention any co-existing conditions (like diabetes or hypertension) and patient age");
+  }
+  if (missingPrompts.length > 0) {
+    return `💡 **To refine hospital recommendations further:** You can ${missingPrompts.join(" and ")} so I can highlight relevant intensive care or specialized surgical units.`;
   }
   return null;
 }
@@ -1145,6 +1281,19 @@ function generateHospitalSearchResponse(context, preferences) {
     if (context.location) content += ` in or near **${context.location}**`;
     if (context.budget) content += `, within your budget of **₹${(context.budget).toLocaleString("en-IN")}**`;
     content += ".\n\n";
+
+    if (context.patientRelationship || context.patientType || context.patientAge || context.diseaseSeverity || (context.comorbidities && context.comorbidities.length > 0)) {
+      content += `### 📋 Clinical & Patient Profile:\n`;
+      const profileItems = [];
+      if (context.patientRelationship || context.patientType) profileItems.push(`**Patient**: ${context.patientRelationship || context.patientType}`);
+      if (context.patientAge) profileItems.push(`**Age**: ${context.patientAge} years`);
+      if (context.diseaseSeverity) profileItems.push(`**Disease Severity**: ${context.diseaseSeverity}`);
+      if (context.comorbidities && context.comorbidities.length > 0) profileItems.push(`**Comorbidities**: ${context.comorbidities.join(", ")}`);
+      if (context.diagnosticReports && context.diagnosticReports.length > 0) profileItems.push(`**Tests Conducted**: ${context.diagnosticReports.join(", ")}`);
+      if (context.subsidyStatus) profileItems.push(`**Scheme / Subsidy**: ${context.subsidyStatus}`);
+      if (context.urgency) profileItems.push(`**Clinical Timing**: ${context.urgency === "urgent" ? "Urgent intervention" : context.urgency === "soon" ? "Needed soon" : "Planned treatment"}`);
+      content += profileItems.map(item => `• ${item}`).join("\n") + "\n\n";
+    }
 
     if (hasLocationFallback) {
       content += `> ⚠️ I could not find disease-specific records strictly in **${context.location}**, so I've included regional directory listings. Their clinical outcomes and exact prices are marked unavailable until verified.\n\n`;
@@ -1755,6 +1904,141 @@ function generateAuditResponse(context, preferences) {
 }
 
 // ============================================================================
+// MEDICAL SCOPE LIMITATION ENGINE
+// ============================================================================
+
+function isMedicalOrClinicalQuery(message, sessionState = {}) {
+  const msg = message.toLowerCase().trim();
+  if (!msg) return false;
+
+  // 1. Emergency patterns always pass
+  if (EMERGENCY_PATTERNS.some(kw => msg.includes(kw))) return true;
+
+  // 2. Audit & provenance queries
+  if (msg.includes("audit") || msg.includes("provenance") || msg.includes("statutory record") || msg.includes("verify data") || msg.includes("audited")) {
+    return true;
+  }
+
+  // 3. Government schemes & subsidies
+  const schemeKeywords = [
+    "ayushman", "pm-jay", "pmjay", "cghs", "echs", "scheme", "subsidy", "subsidized",
+    "golden card", "insurance", "cashless", "mediclaim", "tpa", "bpl", "coverage"
+  ];
+  if (schemeKeywords.some(kw => msg.includes(kw))) return true;
+
+  // 4. Disease synonyms
+  for (const keyword of Object.keys(DISEASE_SYNONYMS)) {
+    if (msg.includes(keyword)) return true;
+  }
+
+  // 5. Treatment synonyms
+  for (const keyword of Object.keys(TREATMENT_SYNONYMS)) {
+    if (msg.includes(keyword)) return true;
+  }
+
+  // 6. Speciality synonyms
+  for (const keyword of Object.keys(SPECIALITY_SYNONYMS)) {
+    if (msg.includes(keyword)) return true;
+  }
+
+  // 7. Facilities
+  for (const fac of FACILITY_KEYWORDS) {
+    if (msg.includes(fac)) return true;
+  }
+
+  // 8. Core healthcare, clinical, anatomical & hospital terms
+  const medicalKeywords = [
+    "hospital", "hospitals", "clinic", "clinics", "nursing home", "doctor", "doctors",
+    "surgeon", "surgeons", "physician", "specialist", "patient", "patients",
+    "medical", "medicine", "clinical", "health", "healthcare", "treatment", "care",
+    "diagnosis", "prognosis", "prescription", "disease", "illness", "disorder",
+    "symptom", "symptoms", "condition", "morbidity", "comorbidity", "mortality",
+    "survival rate", "success rate", "nabh", "jci", "abdm", "cea", "hfr", "icu", "ot",
+    "opd", "ipd", "bed", "beds", "admission", "surgery", "operation", "procedure",
+    "stent", "biopsy", "angioplasty", "angiography", "radiation", "chemotherapy", "dialysis",
+    "mri", "ct scan", "pet scan", "x-ray", "ultrasound", "sonography", "ecg", "echo",
+    "blood test", "kft", "lft", "creatinine", "pathology", "pain", "fever", "cough",
+    "swelling", "bleeding", "wound", "injury", "fracture", "infection", "trauma",
+    "hypertension", "bp", "blood pressure", "diabetes", "diabetic", "asthma", "copd",
+    "tuberculosis", "cancer", "tumor", "tumour", "stroke", "kidney", "renal", "heart",
+    "cardiac", "bypass", "cabg", "knee", "liver", "lungs", "brain", "spine", "ortho"
+  ];
+  if (medicalKeywords.some(kw => msg.includes(kw))) return true;
+
+  // 9. Known hospital names
+  const knownHospitals = [
+    "aiims", "ganga ram", "apollo", "max", "fortis", "medanta", "pgimer",
+    "tata memorial", "narayana", "manipal", "jaslok", "kims", "amrita", "care",
+    "kokilaben", "sterling", "blk", "moolchand", "miot", "capitol", "dmc",
+    "satyam", "sarvodya"
+  ];
+  if (knownHospitals.some(h => msg.includes(h))) return true;
+
+  // 10. Check explicit non-medical patterns
+  for (const pattern of NON_MEDICAL_PATTERNS) {
+    if (pattern.test(msg)) return false;
+  }
+
+  // 11. In an active conversation where disease/speciality is already known:
+  const hasActiveSession = Boolean(
+    sessionState?.diseaseId ||
+    sessionState?.disease ||
+    sessionState?.context?.diseaseId ||
+    sessionState?.context?.disease ||
+    sessionState?.context?.speciality ||
+    (sessionState?.turnCount && sessionState.turnCount > 0)
+  );
+
+  if (hasActiveSession) {
+    // Location answers
+    for (const loc of Object.keys(LOCATION_SYNONYMS)) {
+      if (msg.includes(loc)) return true;
+    }
+    // Patient / Urgency / Budget / Stage / Conversational answers
+    const conversationalAnswers = [
+      "adult", "elderly", "child", "infant", "pediatric", "paediatric", "senior",
+      "father", "mother", "parent", "parents", "son", "daughter", "myself", "me",
+      "husband", "wife", "spouse", "brother", "sister",
+      "planned", "soon", "urgent", "urgently", "routine", "emergency", "not urgent", "elective",
+      "lakh", "lac", "thousand", "budget", "no limit", "affordable", "cheap", "expensive",
+      "stage", "severe", "mild", "moderate", "chronic", "acute", "reports", "scans",
+      "yes", "no", "none", "both", "private", "government", "govt", "public",
+      "chandigarh", "delhi", "mumbai", "bangalore", "kolkata", "chennai", "hyderabad",
+      "jaipur", "lucknow", "patna", "shimla", "pune", "jalandhar", "ludhiana", "patiala"
+    ];
+    if (conversationalAnswers.some(ans => msg.includes(ans))) return true;
+
+    // Check numbers representing age or budget (e.g. "65", "500000")
+    if (/^\d{1,8}$/.test(msg.replace(/[,\s]/g, ""))) return true;
+  }
+
+  // If neither medical terms match nor active session follow-up matches:
+  return false;
+}
+
+function generateScopeLimitationError(message, sessionState = {}) {
+  const activeDisease = sessionState?.context?.disease || sessionState?.disease || null;
+  let contextHelp = "";
+  if (activeDisease) {
+    contextHelp = `\n\n*(Note: Your current session is set to **${activeDisease}**. You can continue by providing your preferred city, patient age/relation, or budget).*`;
+  }
+
+  return {
+    role: "assistant",
+    isEmergency: false,
+    isError: true,
+    errorType: "OUT_OF_SCOPE",
+    content: `❌ **Error: Medical Scope Limitation**\n\nMedScout AI is strictly limited to **medical diseases, clinical conditions, treatments, and hospital matching**.\n\nI cannot answer queries or provide output for non-medical topics (such as general knowledge, coding, weather, entertainment, sports, recipes, or casual conversation).\n\n**Please provide information regarding a disease, condition, or person to proceed:**\n• **Specific Diseases:** e.g., *Coronary Artery Disease*, *Severe Knee Osteoarthritis*, *Kidney Failure (ESRD)*, *Leukemia / Lymphoma*, *Stroke*, *Gallstones*\n• **Hospital Search / Comparison:** e.g., *Find cardiac hospitals in Delhi for my father*, *Compare AIIMS vs Max*\n• **Subsidies & Schemes:** e.g., *PM-JAY Ayushman Bharat coverage*, *Subsidized vs private hospitals*\n• **Clinical Audit:** e.g., *Run audit text*${contextHelp}\n\nPlease enter a disease or medical condition to proceed.`,
+    personalizationNote: null,
+    extractedContext: sessionState?.context || null,
+    resultCards: [],
+    schemeCards: [],
+    sources: [],
+    followUpQuestion: "Please enter a disease or medical condition to proceed."
+  };
+}
+
+// ============================================================================
 // MAIN ENTRY POINT
 // ============================================================================
 
@@ -1780,6 +2064,12 @@ export function processChatMessage(message, sessionState = {}) {
   // 2. Emergency short-circuit
   if (intent === "emergency") {
     return generateEmergencyResponse(msg);
+  }
+
+  // 2b. Medical scope limitation check:
+  // If the query is outside medical diseases / clinical matching, return explicit error
+  if (!isMedicalOrClinicalQuery(msg, sessionState)) {
+    return generateScopeLimitationError(msg, sessionState);
   }
 
   // 3. Extract entities AND learn user preferences (accumulating session state)

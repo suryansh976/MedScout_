@@ -55,4 +55,26 @@ const subsidyTurn = turn("is subsidy available for heart bypass surgery");
 assert.equal(subsidyTurn.role, "assistant");
 assert.match(subsidyTurn.content, /subsidy/i);
 
-console.log("Chatbot audit passed: clarification, location, patient context, significance, comparison, emergency, audit text, and subsidy flows.");
+// Test Scope Limitations: writing something else returns error
+const weatherTurn = turn("What is the weather today in Delhi?");
+assert.equal(weatherTurn.isError, true, "weather query must be flagged as error");
+assert.match(weatherTurn.content, /Scope Limitation/i);
+
+const codeTurn = turn("Write a python script to reverse an array");
+assert.equal(codeTurn.isError, true, "coding query must be flagged as error");
+
+const jokeTurn = turn("Tell me a funny joke");
+assert.equal(jokeTurn.isError, true, "joke query must be flagged as error");
+
+// Test asking for disease & person details
+const detailTurn = turn("I need knee replacement");
+assert.match(detailTurn.content, /Person/i, "must ask for details regarding the person");
+assert.match(detailTurn.content, /Disease/i, "must ask for details regarding the disease");
+
+// Test rich patient profile handling
+const richPatientTurn = turn("Bypass surgery for my 68-year-old father with diabetes in Delhi, planned treatment");
+assert.ok(richPatientTurn.resultCards.length > 0, "should return hospitals when all details are provided");
+assert.match(richPatientTurn.content, /68/i, "should reflect patient age in response");
+assert.match(richPatientTurn.content, /Diabetes/i, "should reflect patient comorbidities in response");
+
+console.log("Chatbot audit passed: clarification, location, patient context, significance, comparison, emergency, audit text, subsidy flows, scope limitations, and patient/disease details.");

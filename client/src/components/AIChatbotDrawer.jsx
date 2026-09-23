@@ -4,6 +4,7 @@ import {
   Send,
   Sparkles,
   AlertTriangle,
+  AlertCircle,
   ShieldCheck,
   FileText,
   ArrowRight,
@@ -410,6 +411,8 @@ export default function AIChatbotDrawer({
                   ? "bg-primary text-white rounded-br-none"
                   : msg.isEmergency
                   ? "bg-red-50 text-danger border border-red-200 rounded-bl-none"
+                  : msg.isError
+                  ? "bg-rose-50 text-rose-950 border-2 border-rose-300 rounded-bl-none shadow-sm"
                   : "bg-white text-on-surface border border-surface-container-high rounded-bl-none"
               }`}
             >
@@ -429,6 +432,14 @@ export default function AIChatbotDrawer({
                 <div className="flex items-center gap-2 text-danger font-bold text-xs uppercase mb-2">
                   <AlertTriangle className="w-4 h-4" />
                   <span>Clinical Safety Alert</span>
+                </div>
+              )}
+
+              {/* Scope Limitation Error Alert */}
+              {msg.isError && (
+                <div className="flex items-center gap-2 text-rose-700 font-bold text-xs uppercase mb-2.5 p-2 rounded-lg bg-rose-100/70 border border-rose-200">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Medical Scope Limitation</span>
                 </div>
               )}
 
@@ -696,6 +707,30 @@ export default function AIChatbotDrawer({
       <div className="px-4 py-2 bg-surface-container-low border-t border-surface-container-high flex items-center gap-1.5 overflow-x-auto text-[11px] whitespace-nowrap">
         <span className="text-tertiary font-semibold">Try:</span>
         <button
+          onClick={() => handleSend("Bypass surgery for my 68-year-old father in Delhi NCR, planned")}
+          className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-900 font-semibold hover:bg-blue-100 transition-colors"
+        >
+          🫀 Bypass for Father (68y, Delhi)
+        </button>
+        <button
+          onClick={() => handleSend("Knee replacement hospital under Ayushman PM-JAY")}
+          className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-900 font-semibold hover:bg-emerald-100 transition-colors"
+        >
+          🦵 Knee Replacement (PM-JAY)
+        </button>
+        <button
+          onClick={() => handleSend("Cancer treatment hospital for adult, needed soon")}
+          className="px-2.5 py-1 rounded-full bg-purple-50 border border-purple-200 text-purple-900 font-semibold hover:bg-purple-100 transition-colors"
+        >
+          🎗️ Cancer Care (Adult)
+        </button>
+        <button
+          onClick={() => handleSend("Kidney dialysis in Chandigarh")}
+          className="px-2.5 py-1 rounded-full bg-sky-50 border border-sky-200 text-sky-900 font-semibold hover:bg-sky-100 transition-colors"
+        >
+          🩺 Kidney Care (Chandigarh)
+        </button>
+        <button
           onClick={() => handleSend("run audit text")}
           className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-900 font-semibold hover:bg-emerald-100 transition-colors flex items-center gap-1"
         >
@@ -709,34 +744,10 @@ export default function AIChatbotDrawer({
           Compare Subsidy Options
         </button>
         <button
-          onClick={() => handleSend("I care more about treatment success rate than distance.")}
-          className="px-2.5 py-1 rounded-full bg-white border border-surface-container-high text-on-surface hover:bg-surface-container transition-colors"
-        >
-          Priority: Success Rate &gt; Distance
-        </button>
-        <button
-          onClick={() => handleSend("I can go up to ₹1.5 lakh.")}
-          className="px-2.5 py-1 rounded-full bg-white border border-surface-container-high text-on-surface hover:bg-surface-container transition-colors"
-        >
-          Update Budget to ₹1.5L
-        </button>
-        <button
           onClick={() => handleSend("I prefer government hospitals.")}
           className="px-2.5 py-1 rounded-full bg-white border border-surface-container-high text-on-surface hover:bg-surface-container transition-colors"
         >
           Government Hospitals
-        </button>
-        <button
-          onClick={() => handleSend("I want hospitals that have treated many patients with this disease.")}
-          className="px-2.5 py-1 rounded-full bg-white border border-surface-container-high text-on-surface hover:bg-surface-container transition-colors"
-        >
-          High Patient Volume
-        </button>
-        <button
-          onClick={() => handleSend("How are hospitals ranked?")}
-          className="px-2.5 py-1 rounded-full bg-white border border-surface-container-high text-on-surface hover:bg-surface-container transition-colors"
-        >
-          Ranking Methodology
         </button>
       </div>
 
@@ -801,7 +812,7 @@ export default function AIChatbotDrawer({
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={attachedReport ? `Add instructions for ${attachedReport.name}...` : "Type condition, budget, or preferences (e.g. success rate > distance)..."}
+            placeholder={attachedReport ? `Add instructions for ${attachedReport.name}...` : "Describe disease & patient details (e.g. bypass for father, 65yo in Delhi)..."}
             className="flex-1 py-2.5 px-3.5 rounded-xl bg-surface-container-low border border-surface-container-high text-xs sm:text-sm text-on-surface placeholder:text-outline focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary/20"
           />
           <button
