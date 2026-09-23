@@ -15,7 +15,7 @@ export default function ProvenanceStrip() {
               142,800+
             </span>
             <span className="text-xs text-on-surface-variant font-medium tracking-wide uppercase">
-              Audited Clinical Hospital Episodes Recorded
+              verified hospital records
             </span>
           </div>
         </div>
@@ -24,25 +24,25 @@ export default function ProvenanceStrip() {
         <div className="flex flex-wrap items-center gap-4 lg:gap-6 text-xs text-on-surface-variant font-medium">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-secondary"></span>
-            <span className="font-semibold text-on-surface">ABDM HFR</span>
+            <span className="font-semibold text-on-surface" title="Ayushman Bharat Digital Mission — India's national health records system. HFR means the hospital is officially registered in it.">ABDM HFR (?)</span>
             <span className="text-[11px] text-tertiary">(National Sync v4)</span>
           </div>
 
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-secondary"></span>
-            <span className="font-semibold text-on-surface">MoHFW CEA 2010</span>
+            <span className="font-semibold text-on-surface" title="Ministry of Health & Family Welfare — the central government body that regulates healthcare in India.">MoHFW (?)</span>
             <span className="text-[11px] text-tertiary">(Monthly Stat Audits)</span>
           </div>
 
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-secondary"></span>
-            <span className="font-semibold text-on-surface">PM-JAY NHA</span>
+            <span className="font-semibold text-on-surface" title="Ayushman Bharat government health insurance scheme — covers many treatments for eligible families.">PM-JAY (?)</span>
             <span className="text-[11px] text-tertiary">(Standard Package 2.0)</span>
           </div>
 
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-secondary"></span>
-            <span className="font-semibold text-on-surface">NABH & ICMR</span>
+            <span className="font-semibold text-on-surface" title="NABH is a national hospital quality certification. ICMR is India's national medical research body.">NABH & ICMR (?)</span>
             <span className="text-[11px] text-tertiary">(Clinical Safety Nodes)</span>
           </div>
         </div>

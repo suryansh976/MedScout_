@@ -29,6 +29,11 @@ export default function HospitalDetailModal({ hospital, onClose, onQueue }) {
     image,
     outcome,
     cost,
+    registryStatus,
+    directorySource,
+    specialities,
+    supportedDiseases,
+    evidenceStatus,
     sources = []
   } = hospital;
 
@@ -89,6 +94,28 @@ export default function HospitalDetailModal({ hospital, onClose, onQueue }) {
 
         {/* Scrollable Content Body */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-6">
+          {registryStatus === "DIRECTORY_ONLY" && (
+            <div className="rounded-2xl border border-warning/30 bg-warning-light p-4 text-sm text-warning">
+              <strong>Directory listing, not a clinical evidence record.</strong>
+              <p className="mt-1 text-xs">{directorySource} Outcome, cost, accreditation, and scheme participation details require current verification before use.</p>
+            </div>
+          )}
+
+          {specialities?.length > 0 && (
+            <div>
+              <h3 className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-tertiary"><Building2 className="h-4 w-4 text-secondary" /> Listed specialties and services</h3>
+              <div className="flex flex-wrap gap-2">{specialities.map((speciality, index) => <span key={index} className="rounded-xl border border-surface-container-high bg-surface-container-low px-3 py-1.5 text-xs font-semibold text-on-surface">{speciality}</span>)}</div>
+            </div>
+          )}
+
+          {supportedDiseases?.length > 0 && (
+            <div>
+              <h3 className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-tertiary"><Activity className="h-4 w-4 text-secondary" /> Listed condition areas</h3>
+              <div className="flex flex-wrap gap-2">{supportedDiseases.map(disease => <span key={disease} className="rounded-xl border border-secondary/20 bg-secondary-container px-3 py-1.5 text-xs font-semibold text-secondary">{disease}</span>)}</div>
+              {evidenceStatus === "DIRECTORY_LISTED_UNVERIFIED" && <p className="mt-2 text-[11px] text-tertiary">These are directory-linked service areas. Disease-specific outcomes and prices are shown only when verified records exist.</p>}
+            </div>
+          )}
+
           {/* 1. Accreditations & Registry Standards */}
           <div>
             <h3 className="text-xs font-bold text-tertiary uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
@@ -113,14 +140,14 @@ export default function HospitalDetailModal({ hospital, onClose, onQueue }) {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-headline font-bold text-base text-on-surface">
-                  Verified Outcome Return: Coronary Artery Bypass (CABG)
+                  {outcome?.diseaseId === "dis_cabg" || !outcome ? "Disease-Specific Clinical Outcome Return" : "Disease-Specific Clinical Outcome Return"}
                 </h3>
                 <p className="text-xs text-on-surface-variant">
                   Standardized metrics from statutory reporting period: {outcome?.reportingPeriod || "FY 2023-24"}
                 </p>
               </div>
               <span className="px-2.5 py-1 rounded-full bg-secondary-container text-secondary text-xs font-bold">
-                {outcome?.confidence || "Verified Return"}
+                  {outcome?.confidence || "Unavailable"}
               </span>
             </div>
 

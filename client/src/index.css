@@ -7,7 +7,41 @@
     background-color: #f9f9ff;
     color: #0e1c2f;
     font-family: 'Inter', sans-serif;
+    transition: background-color 180ms ease, color 180ms ease;
   }
+}
+
+@layer utilities {
+  .dark .bg-white { background-color: #162236 !important; }
+  .dark .bg-white\/90 { background-color: rgba(15, 27, 45, 0.92) !important; }
+  .dark .bg-white\/95 { background-color: rgba(22, 34, 54, 0.95) !important; }
+  .dark .bg-surface { background-color: #0f1b2d !important; }
+  .dark .bg-surface-container-low { background-color: #14243a !important; }
+  .dark .bg-surface-container-low\/30 { background-color: rgba(20, 36, 58, 0.3) !important; }
+  .dark .bg-surface-container-low\/60 { background-color: rgba(20, 36, 58, 0.6) !important; }
+  .dark .bg-surface-container-low\/70 { background-color: rgba(20, 36, 58, 0.7) !important; }
+  .dark .bg-surface-container-low\/80 { background-color: rgba(20, 36, 58, 0.8) !important; }
+  .dark .bg-surface-container { background-color: #1b2d45 !important; }
+  .dark .bg-surface-container\/40 { background-color: rgba(27, 45, 69, 0.4) !important; }
+  .dark .bg-surface-container-high { background-color: #263b56 !important; }
+  .dark .bg-surface-container-high\/60 { background-color: rgba(38, 59, 86, 0.6) !important; }
+  .dark .bg-surface-container-high\/70 { background-color: rgba(38, 59, 86, 0.7) !important; }
+  .dark .text-on-surface { color: #edf3ff !important; }
+  .dark .text-on-surface-variant { color: #b9c7dc !important; }
+  .dark .text-tertiary { color: #9caec5 !important; }
+  .dark .text-outline { color: #9caec5 !important; }
+  .dark .border-surface-container,
+  .dark .border-surface-container-high,
+  .dark .border-surface-container-high\/60,
+  .dark .border-surface-container-high\/70 { border-color: #2b415d !important; }
+  .dark .border-outline-variant\/60 { border-color: rgba(137, 157, 184, 0.6) !important; }
+  .dark .placeholder\:text-outline::placeholder { color: #8ea1ba !important; }
+  .dark input,
+  .dark textarea,
+  .dark select { color-scheme: dark; }
+  .dark .glass-panel { background: rgba(22, 34, 54, 0.85); border-color: rgba(91, 119, 151, 0.35); }
+  .dark .glass-dropdown { background: rgba(22, 34, 54, 0.96); border-color: rgba(91, 119, 151, 0.45); }
+  .dark .glass-tray { background: rgba(22, 34, 54, 0.94); border-color: rgba(91, 119, 151, 0.45); }
 }
 
 /* Custom glassmorphism and subtle elevation */
@@ -46,4 +80,12 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #737687;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #526985;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #7890ad;
 }

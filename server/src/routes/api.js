@@ -1,6 +1,7 @@
 import express from "express";
 import { seedData } from "../data/seedData.js";
 import { processChatMessage } from "../services/chatbotEngine.js";
+import { enhanceWithOpenAI, getAIStatus } from "../services/openaiChat.js";
 import { optionalAuth, authenticateToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -31,6 +32,8 @@ function enrichHospital(hosp, diseaseId = "dis_cabg", treatmentId = "trt_cabg_on
 
   return {
     ...hosp,
+    supportedDiseases: (hosp.supportedDiseaseIds || []).map(id => seedData.diseases.find(item => item.id === id)?.name || id),
+    evidenceStatus: hosp.capabilityStatus || "EVIDENCE_BACKED",
     outcome,
     cost,
     sources
@@ -40,8 +43,14 @@ function enrichHospital(hosp, diseaseId = "dis_cabg", treatmentId = "trt_cabg_on
 // 1. GET /api/hospitals - list and filter
 router.get("/hospitals", (req, res) => {
   const { disease, treatment, maxBudget, accreditation, query } = req.query;
+  const matchedDisease = disease && seedData.diseases.find(item =>
+    item.id === disease || item.name.toLowerCase() === disease.toLowerCase()
+  );
+  const diseaseId = matchedDisease?.id || disease;
 
-  let results = hospitalsState.map(h => enrichHospital(h, disease || "dis_cabg", treatment || "trt_cabg_onpump"));
+  let results = hospitalsState
+    .filter(h => !diseaseId || h.supportedDiseaseIds?.includes(diseaseId))
+    .map(h => enrichHospital(h, diseaseId || "dis_cabg", treatment || "trt_cabg_onpump"));
 
   if (query) {
     const q = query.toLowerCase();
@@ -88,6 +97,8 @@ router.get("/hospitals/:id", (req, res) => {
     success: true,
     data: {
       ...hospital,
+      supportedDiseases: (hospital.supportedDiseaseIds || []).map(id => seedData.diseases.find(item => item.id === id)?.name || id),
+      evidenceStatus: hospital.capabilityStatus || "EVIDENCE_BACKED",
       allOutcomes,
       allCosts,
       sources: relevantSources
@@ -152,17 +163,35 @@ router.post("/compare", (req, res) => {
 
 // 6. POST /api/chat - AI Chatbot reasoning turn (with session state)
 // Session state is maintained client-side and passed back each turn
-router.post("/chat", (req, res) => {
+router.post("/chat", async (req, res) => {
   const { message, sessionState } = req.body;
   if (!message || !message.trim()) {
     return res.status(400).json({ success: false, error: "Message is required" });
   }
 
-  const botReply = processChatMessage(message, sessionState || {});
+  const profileContext = req.user ? {
+    location: req.user.preferences?.location?.value || req.user.preferredCity || null,
+    budget: req.user.preferences?.budget?.max || null,
+    maxDistanceKm: req.user.preferences?.maxDistance?.value || null,
+    locationPermission: "profile"
+  } : {};
+  const mergedSessionState = {
+    ...(sessionState || {}),
+    context: {
+      ...profileContext,
+      ...(sessionState?.context || {})
+    }
+  };
+  const localReply = processChatMessage(message, mergedSessionState);
+  const botReply = await enhanceWithOpenAI({ message: message.trim(), localResponse: localReply });
   res.json({
     success: true,
     data: botReply
   });
+});
+
+router.get("/chat/status", (req, res) => {
+  res.json({ success: true, data: getAIStatus() });
 });
 
 // 7. GET /api/sources - list registry source documents

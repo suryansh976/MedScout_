@@ -30,6 +30,25 @@ const router = express.Router();
 // All user routes require authentication
 router.use(authenticateToken);
 
+// ─── GET /api/user/abha/status ──────────────────────────────────────────────
+// This reports integration readiness only. It never accepts or stores Aadhaar
+// or ABHA identifiers until an approved ABDM consent flow is implemented.
+router.get("/abha/status", (req, res) => {
+  const configured = Boolean(process.env.ABDM_CLIENT_ID && process.env.ABDM_CLIENT_SECRET && process.env.ABDM_REDIRECT_URI);
+  res.json({
+    success: true,
+    data: {
+      status: configured ? "READY_FOR_CONSENT_FLOW" : "NOT_CONFIGURED",
+      configured,
+      consentRequired: true,
+      storesIdentifiers: false,
+      message: configured
+        ? "ABDM connection is ready for an approved consent flow."
+        : "Official ABDM credentials are not configured for this MedScout environment."
+    }
+  });
+});
+
 // ─── GET /api/user/profile ────────────────────────────────────────────────────
 router.get("/profile", (req, res) => {
   res.json({ success: true, data: req.user });

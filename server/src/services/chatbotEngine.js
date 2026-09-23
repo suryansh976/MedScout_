@@ -1,9 +1,14 @@
 import { seedData } from "../data/seedData.js";
 
 // ============================================================================
-// MedScout AI Chatbot Engine — Adaptive Learning Edition
-// Architecture: Understand → Remember Context → Structure Preferences →
-//               Retrieve Verified Data → Adapt Search → Explain Results
+// MedScout AI Chatbot Engine — Conversational Information Gathering Edition
+// Architecture: Gather Info Progressively → Understand Context →
+//               Retrieve Verified Data → Rank → Explain Results with Significance
+//
+// Core Conversation Flow:
+// Turn 1: Ask for disease/condition if not known
+// Turn 2: Ask for location + budget (together)
+// Turn 3: Show hospitals WITH significance + ask for urgency/patient type as follow-up
 //
 // Core Principle:
 // The LLM is NEVER the source of hospital facts. All facts come from retrieval.
@@ -16,7 +21,10 @@ const EMERGENCY_PATTERNS = [
   "chest pain", "heart attack", "unconscious", "difficulty breathing",
   "shortness of breath", "severe bleeding", "paralysis", "stroke",
   "sudden numbness", "collapse", "seizure", "cannot breathe",
-  "crushing pain", "fainting", "choking", "severe head injury"
+  "crushing pain", "fainting", "choking", "severe head injury",
+  "facial drooping", "face drooping", "slurred speech", "speech is slurred", "one-sided weakness", "overdose",
+  "poisoning", "severe allergic reaction", "suicidal", "suicide",
+  "rigid abdomen", "high fever and lethargy"
 ];
 
 const DATA_CONFIDENCE_LEVELS = {
@@ -52,7 +60,21 @@ const DISEASE_SYNONYMS = {
   "car-t": "dis_leukemia", "chemotherapy": "dis_leukemia",
   // Renal
   "kidney": "dis_ckd", "renal": "dis_ckd", "dialysis": "dis_ckd",
-  "transplant": "dis_ckd", "nephrology": "dis_ckd", "esrd": "dis_ckd"
+  "transplant": "dis_ckd", "nephrology": "dis_ckd", "esrd": "dis_ckd",
+  // Additional taxonomy categories from md/diseases.md
+  "stroke": "dis_neurology", "epilepsy": "dis_neurology", "parkinson": "dis_neurology",
+  "migraine": "dis_neurology", "multiple sclerosis": "dis_neurology", "neurology": "dis_neurology",
+  "cirrhosis": "dis_gastroenterology", "hepatitis": "dis_gastroenterology", "ibd": "dis_gastroenterology",
+  "pancreatitis": "dis_gastroenterology", "gerd": "dis_gastroenterology", "gastroenterology": "dis_gastroenterology",
+  "diabetes": "dis_endocrinology", "thyroid": "dis_endocrinology", "pcos": "dis_endocrinology",
+  "adrenal": "dis_endocrinology", "endocrinology": "dis_endocrinology",
+  "asthma": "dis_pulmonology", "copd": "dis_pulmonology", "tuberculosis": "dis_pulmonology",
+  "pneumonia": "dis_pulmonology", "pulmonology": "dis_pulmonology",
+  "pediatric": "dis_pediatrics", "paediatric": "dis_pediatrics", "child": "dis_pediatrics",
+  "depression": "dis_psychiatry", "anxiety": "dis_psychiatry", "schizophrenia": "dis_psychiatry",
+  "substance use": "dis_psychiatry", "mental health": "dis_psychiatry", "psychiatry": "dis_psychiatry",
+  "trauma": "dis_general_multispecialty", "infectious disease": "dis_general_multispecialty",
+  "general surgery": "dis_general_multispecialty"
 };
 
 const TREATMENT_SYNONYMS = {
@@ -105,6 +127,7 @@ const FACILITY_KEYWORDS = [
 // Tool 1: Search Hospitals
 function toolSearchHospitals({ disease, treatment, speciality, location, maxDistance, budget, facilities, governmentScheme, ownershipPreference }) {
   let results = [...seedData.hospitals];
+  let locationSearchFallback = false;
 
   // Filter by disease-specific capability
   if (disease) {
@@ -114,10 +137,44 @@ function toolSearchHospitals({ disease, treatment, speciality, location, maxDist
     const diseaseCostIds = seedData.costs
       .filter(c => c.diseaseId === disease)
       .map(c => c.hospitalId);
-    const relevantIds = new Set([...diseaseOutcomeIds, ...diseaseCostIds]);
-    if (relevantIds.size > 0) {
+    const capabilityIds = seedData.hospitals
+      .filter(hospital => hospital.supportedDiseaseIds?.includes(disease))
+      .map(hospital => hospital.id);
+    const relevantIds = new Set([...diseaseOutcomeIds, ...diseaseCostIds, ...capabilityIds]);
+    const locationTerms = location?.toLowerCase().split(/\s+/).filter(term => term.length > 2) || [];
+    const localHospitals = locationTerms.length > 0
+      ? seedData.hospitals.filter(hospital => {
+          const haystack = `${hospital.locationName} ${hospital.specialities.join(" ")}`.toLowerCase();
+          return locationTerms.some(term => haystack.includes(term));
+        })
+      : [];
+    const localRelevantHospitals = localHospitals.filter(hospital => relevantIds.has(hospital.id));
+
+    if (localHospitals.length > 0) {
+      results = localRelevantHospitals.length > 0 ? localRelevantHospitals : localHospitals;
+      locationSearchFallback = localRelevantHospitals.length === 0;
+    } else if (relevantIds.size > 0) {
       results = results.filter(h => relevantIds.has(h.id));
     }
+  }
+
+  // Prefer facilities in the requested area, but keep broader verified options
+  // available when the local registry has no disease-specific records.
+  if (location) {
+    const locationTerms = location.toLowerCase().split(/\s+/).filter(term => term.length > 2);
+    const localResults = results.filter(hospital => {
+      const haystack = `${hospital.locationName} ${hospital.specialities.join(" ")}`.toLowerCase();
+      return locationTerms.some(term => haystack.includes(term));
+    });
+    if (localResults.length > 0) results = localResults;
+    else locationSearchFallback = true;
+  }
+
+  if (speciality) {
+    const specialityResults = results.filter(hospital =>
+      hospital.specialities.some(item => item.toLowerCase().includes(speciality.toLowerCase().split(" /")[0]))
+    );
+    if (specialityResults.length > 0) results = specialityResults;
   }
 
   // Filter by government scheme participation
@@ -147,7 +204,7 @@ function toolSearchHospitals({ disease, treatment, speciality, location, maxDist
   return results.map(h => {
     const outcome = seedData.outcomes.find(o => o.hospitalId === h.id && (!disease || o.diseaseId === disease)) || null;
     const cost = seedData.costs.find(c => c.hospitalId === h.id && (!disease || c.diseaseId === disease)) || null;
-    return { ...h, outcome, cost };
+    return { ...h, outcome, cost, locationSearchFallback };
   });
 }
 
@@ -256,6 +313,12 @@ function detectIntent(message) {
     return "government_scheme";
   }
 
+  if ((msg.includes("why doesn't") || msg.includes("why does") || msg.includes("data gap") ||
+      msg.includes("not show") || msg.includes("unavailable") || msg.includes("missing data")) &&
+      (msg.includes("hospital") || msg.includes("rate") || msg.includes("outcome") || msg.includes("cost"))) {
+    return "data_gap";
+  }
+
   // Comparison
   if (msg.includes("compare") || msg.includes("vs") || msg.includes("versus") ||
       msg.includes("difference between") || msg.includes("which is better") ||
@@ -283,6 +346,18 @@ function detectIntent(message) {
        msg.includes("come from") || msg.includes("how do you know") || msg.includes("data from")) &&
       !msg.includes("find") && !msg.includes("hospital")) {
     return "evidence_question";
+  }
+
+  if (msg.includes("which speciality") || msg.includes("which specialty") ||
+      msg.includes("what specialist") || msg.includes("don't know which") ||
+      msg.includes("not sure which department")) {
+    return "speciality_discovery";
+  }
+
+  const healthInfoTerms = ["symptom", "symptoms", "cause", "causes", "remedy", "remedies", "self care", "what is", "signs of", "how to manage"];
+  if (healthInfoTerms.some(term => msg.includes(term)) &&
+      !msg.includes("find hospital") && !msg.includes("hospital near") && !msg.includes("compare hospital")) {
+    return "health_info";
   }
 
   // Incomplete / vague search (symptoms without diagnosis)
@@ -319,6 +394,16 @@ function normalizeSessionState(rawState = {}) {
     facilities: Array.isArray(rawState.facilities) ? rawState.facilities : (rawState.context?.facilities || []),
     selectedHospitals: Array.isArray(rawState.selectedHospitals) ? rawState.selectedHospitals : (rawState.context?.selectedHospitals || []),
     comparisonMode: rawState.comparisonMode ?? rawState.context?.comparisonMode ?? false,
+    locationPermission: rawState.locationPermission || rawState.context?.locationPermission || "unknown",
+    patientType: rawState.patientType || rawState.context?.patientType || null,
+    ageGroup: rawState.ageGroup || rawState.context?.ageGroup || null,
+    urgency: rawState.urgency || rawState.context?.urgency || null,
+    carePreference: rawState.carePreference || rawState.context?.carePreference || null,
+    comparisonPriorities: Array.isArray(rawState.comparisonPriorities)
+      ? rawState.comparisonPriorities
+      : (rawState.context?.comparisonPriorities || []),
+    // Track what questions have been asked to avoid repetition
+    askedAbout: Array.isArray(rawState.askedAbout) ? rawState.askedAbout : (rawState.context?.askedAbout || []),
     missingInformation: [],
     safetyFlags: []
   };
@@ -393,12 +478,44 @@ function extractContextAndPreferences(message, sessionState = {}) {
   }
 
   // 4. Location extraction
+  if (msg.includes("forget my location") || msg.includes("don't use my location") || msg.includes("do not use my location")) {
+    context.location = null;
+    context.locationPermission = "denied";
+  }
   for (const [keyword, loc] of Object.entries(LOCATION_SYNONYMS)) {
-    if (msg.includes(keyword)) {
+    if (context.locationPermission !== "denied" && msg.includes(keyword)) {
       context.location = loc;
+      context.locationPermission = "user_provided";
       break;
     }
   }
+
+  // 4b. High-value, non-diagnostic user context
+  if (/\b(child|kid|son|daughter|paediatric|pediatric)\b/i.test(msg)) context.patientType = "child";
+  else if (/\b(parent|father|mother|elderly|senior)\b/i.test(msg)) context.patientType = "adult_dependent";
+  else if (/\b(myself|me|i need|for me)\b/i.test(msg)) context.patientType = "self";
+
+  if (/\b(infant|baby|newborn)\b/i.test(msg)) context.ageGroup = "infant";
+  else if (/\b(child|kid|teen|adolescent)\b/i.test(msg)) context.ageGroup = "child";
+  else if (/\b(senior|elderly|older adult)\b/i.test(msg)) context.ageGroup = "older_adult";
+  else if (/\b(adult|grown-up)\b/i.test(msg)) context.ageGroup = "adult";
+
+  if (/\b(today|urgent|urgently|soon|this week|asap|immediately)\b/i.test(msg)) context.urgency = "soon";
+  else if (/\b(planned|elective|not urgent|routine|later|in future)\b/i.test(msg)) context.urgency = "planned";
+
+  if (/\b(government|public|pm-jay|pmjay|ayushman)\b/i.test(msg)) context.carePreference = "government_or_scheme";
+  else if (/\b(private|short wait|faster appointment)\b/i.test(msg)) context.carePreference = "private_or_access";
+
+  const comparisonPriorityMap = [
+    ["cost", /\b(cost|cheap|afford|budget)\b/i],
+    ["distance", /\b(distance|near|nearby|close)\b/i],
+    ["outcomes", /\b(outcome|success|mortality|results)\b/i],
+    ["volume", /\b(volume|experienced|many patients|caseload)\b/i],
+    ["access", /\b(wait|appointment|availability|access)\b/i]
+  ];
+  comparisonPriorityMap.forEach(([priority, pattern]) => {
+    if (pattern.test(msg) && !context.comparisonPriorities.includes(priority)) context.comparisonPriorities.push(priority);
+  });
 
   // 5. Facilities extraction
   for (const fac of FACILITY_KEYWORDS) {
@@ -619,6 +736,19 @@ function extractContextAndPreferences(message, sessionState = {}) {
 // and transparency rationales are dynamically generated.
 // ============================================================================
 
+// ============================================================================
+// DELTA PARSER — mortalityBenchmarkDelta is stored as a string like
+// "-0.56% below state avg" or "-0.72% below national benchmark".
+// This parses the leading numeric value safely.
+// ============================================================================
+function parseDeltaValue(delta) {
+  if (delta === null || delta === undefined) return 0;
+  if (typeof delta === "number") return delta;
+  // Extract leading float, e.g. "-0.56" from "-0.56% below state avg"
+  const match = String(delta).match(/^([+-]?[\d.]+)/);
+  return match ? parseFloat(match[1]) : 0;
+}
+
 function rankHospitalsWithPreferences(hospitals, context, preferences = {}) {
   const {
     outcomePriority = "normal",
@@ -652,15 +782,17 @@ function rankHospitalsWithPreferences(hospitals, context, preferences = {}) {
     if (h.outcome && h.outcome.mortalityRate30Day !== null) {
       const mort = h.outcome.mortalityRate30Day;
       const outcomeWeight = outcomePriority === "high" ? 35 : 20;
-      const delta = h.outcome.mortalityBenchmarkDelta || 0;
-      if (delta < 0) {
+      const deltaNum = parseDeltaValue(h.outcome.mortalityBenchmarkDelta);
+      const deltaLabel = h.outcome.mortalityBenchmarkDelta || "";
+      if (deltaNum < 0) {
         score += outcomeWeight;
-        rankingRationale.push(`Superior outcomes: ${mort}% 30-day mortality (${Math.abs(delta)}% below national benchmark)`);
-      } else if (delta === 0) {
+        rankingRationale.push(`Superior outcomes: ${mort}% 30-day mortality (${deltaLabel})`);
+      } else if (deltaNum === 0) {
         score += Math.round(outcomeWeight * 0.7);
         rankingRationale.push(`Meets national outcome benchmark (${mort}%)`);
       } else {
         score += Math.round(outcomeWeight * 0.4);
+        rankingRationale.push(`Outcome above benchmark: ${mort}% 30-day mortality (${deltaLabel})`);
       }
     } else {
       // Missing outcome data: never assumed zero, explicitly reported
@@ -740,26 +872,167 @@ function rankHospitalsWithPreferences(hospitals, context, preferences = {}) {
 }
 
 // ============================================================================
-// PROGRESSIVE QUESTIONING (Requirement 3: Avoid repeated interrogation)
+// PROGRESSIVE QUESTIONING — SMART MULTI-TURN INFO GATHERING
+// Key rules:
+//  1. Minimum required to show hospitals: diseaseId (or speciality) + location
+//  2. Ask for disease FIRST if unknown
+//  3. Ask for location+budget TOGETHER as second question
+//  4. Once we have disease+location → show hospitals + ask urgency as follow-up
+//  5. Never ask the same question twice (track via context.askedAbout)
 // ============================================================================
 
-function generateFollowUpQuestion(context, intent) {
-  if (intent === "hospital_search" || intent === "incomplete_search") {
-    // Only ask what is genuinely missing from the accumulated conversation context
-    if (!context.diseaseId && !context.speciality && !context.location) {
-      return "Which city or area would you prefer, and do you have a confirmed condition or doctor's recommendation?";
+/**
+ * Returns the NEXT question to ask based on what's still missing.
+ * Returns null when enough info exists to show hospitals.
+ * ONLY blocks on disease + location — everything else is optional.
+ */
+function getNextRequiredQuestion(context) {
+  // Step 1: Must know what condition/disease
+  if (!context.diseaseId && !context.speciality) {
+    if (!context.askedAbout.includes("disease")) {
+      return {
+        topic: "disease",
+        text: "To find the best hospitals for you, I first need to know: **what condition or treatment are you looking for?**\n\nYou can describe it in your own words — for example: 'heart bypass surgery', 'knee replacement', 'kidney dialysis', 'cancer treatment', or just the body part affected. I won't diagnose you; I'll use this only to match verified hospital records."
+      };
     }
-    if (!context.diseaseId && !context.speciality) {
-      return "If your doctor recommended a specific surgery (e.g., CABG, Knee Replacement) or diagnosis, share it to refine the clinical evidence.";
+    // Already asked, accept vague and proceed with speciality
+    return null;
+  }
+
+  // Step 2: Must know location (ask together with budget)
+  if (!context.location) {
+    if (!context.askedAbout.includes("location")) {
+      const diseaseName = context.disease || context.speciality || "this condition";
+      return {
+        topic: "location",
+        text: `Great — I'm looking for hospitals that specialize in **${diseaseName}**.\n\nTwo quick things to personalize your results:\n\n1. **Which city or area** should I search? (e.g., Delhi, Mumbai, Chandigarh, Bangalore)\n2. **What's your approximate budget?** (optional — e.g., '5 lakh', '3-4 lakh', or 'no limit')\n\nYou can skip the budget if you prefer.`
+      };
     }
-    if (!context.location && !context.budget) {
-      return "Which city or area should I prioritize, and do you have an approximate treatment budget ceiling?";
-    }
-    if (!context.location) {
-      return "Which city or region should I prioritize for this search?";
-    }
+    return null;
+  }
+
+  // We have disease + location → ready to show hospitals
+  return null;
+}
+
+/**
+ * Returns an OPTIONAL follow-up question to append after showing hospitals.
+ * These enrich the results but don't block the hospital display.
+ */
+function getOptionalFollowUp(context) {
+  if (!context.patientType && !context.urgency && !context.askedAbout.includes("urgency")) {
+    return "To refine this further: **Is this for you or someone else**, and **is it urgent or planned**? (You can skip this.)";
+  }
+  if (!context.urgency && !context.askedAbout.includes("urgency") && context.patientType) {
+    return "One more thing — **is this treatment urgent or planned**? This helps me highlight which hospitals you should contact right away.";
   }
   return null;
+}
+
+function generateClarificationResponse(context, preferences, questionObj) {
+  // Mark this topic as asked so we don't repeat it
+  const updatedContext = {
+    ...context,
+    askedAbout: [...(context.askedAbout || []), questionObj.topic]
+  };
+
+  return {
+    role: "assistant",
+    isEmergency: false,
+    content: questionObj.text,
+    personalizationNote: null,
+    extractedContext: { ...updatedContext, preferences },
+    resultCards: [],
+    schemeCards: [],
+    sources: [],
+    followUpQuestion: null,
+    _askedAboutUpdate: questionObj.topic
+  };
+}
+
+// ============================================================================
+// RICH HOSPITAL SIGNIFICANCE GENERATOR
+// Explains WHY each hospital is a good match for the user's specific situation
+// ============================================================================
+
+function explainHospitalSignificance(hospital, context, rank) {
+  const reasons = [];
+  const highlights = [];
+
+  // 1. Outcome quality — the most important clinical signal
+  if (hospital.outcome && hospital.outcome.mortalityRate30Day !== null) {
+    const mort = hospital.outcome.mortalityRate30Day;
+    const deltaNum = parseDeltaValue(hospital.outcome.mortalityBenchmarkDelta);
+    const deltaLabel = hospital.outcome.mortalityBenchmarkDelta || "";
+    if (deltaNum < 0) {
+      const absVal = Math.abs(deltaNum).toFixed(2);
+      highlights.push(`✅ **${absVal}% better than benchmark** — 30-day mortality: ${mort}% (${deltaLabel})`);
+    } else if (deltaNum === 0) {
+      highlights.push(`✅ Meets national benchmark: ${mort}% 30-day mortality`);
+    } else {
+      highlights.push(`⚠️ 30-day mortality: ${mort}% (${deltaLabel} — above benchmark)`);
+    }
+  } else {
+    highlights.push("⚠️ Disease-specific outcome data not yet publicly verified");
+  }
+
+  // 2. Clinical volume — experience matters
+  if (hospital.outcome && hospital.outcome.annualVolume) {
+    const vol = hospital.outcome.annualVolume;
+    const diseaseName = context.disease || "this condition";
+    if (vol >= 1000) {
+      highlights.push(`🏥 **High-volume center**: ${vol.toLocaleString()} ${diseaseName} cases per year — among the most experienced in the registry`);
+    } else if (vol >= 500) {
+      highlights.push(`🏥 **Experienced center**: ${vol.toLocaleString()} cases/year for ${diseaseName}`);
+    } else {
+      highlights.push(`🏥 ${vol.toLocaleString()} documented cases/year for ${diseaseName}`);
+    }
+  }
+
+  // 3. Cost fit
+  if (hospital.cost) {
+    const costStr = `₹${hospital.cost.minAmount.toLocaleString("en-IN")} – ₹${hospital.cost.maxAmount.toLocaleString("en-IN")}`;
+    if (context.budget && hospital.cost.minAmount <= context.budget) {
+      highlights.push(`💰 **Within your budget**: Package starts at ₹${hospital.cost.minAmount.toLocaleString("en-IN")} (your budget: ₹${context.budget.toLocaleString("en-IN")})`);
+    } else {
+      highlights.push(`💰 Documented package: ${costStr} (${hospital.cost.costType || "standard tariff"})`);
+    }
+  }
+
+  // 4. Accreditation
+  if (hospital.accreditationTier) {
+    const tier = hospital.accreditationTier;
+    if (tier.includes("NABH") || tier.includes("JCI")) {
+      highlights.push(`🏆 **${tier} Accredited** — international/national quality standard`);
+    } else {
+      highlights.push(`📋 ${tier} accreditation`);
+    }
+  }
+
+  // 5. Location match
+  if (context.location && hospital.locationName.toLowerCase().includes(context.location.toLowerCase().split(" ")[0])) {
+    highlights.push(`📍 Located in **${hospital.locationName}** — matches your preferred area`);
+  }
+
+  // 6. Ownership context
+  if (hospital.ownership) {
+    if (hospital.ownership.toLowerCase().includes("public") || hospital.ownership.toLowerCase().includes("autonomous")) {
+      highlights.push(`🏛️ Government/autonomous institution — typically lower cost and PM-JAY empanelled`);
+    }
+  }
+
+  // 7. Ranking position explanation
+  let rankExplanation = "";
+  if (rank === 1) {
+    rankExplanation = "**Ranked #1** based on the combination of verified outcome data, clinical volume, and your stated preferences.";
+  } else if (rank === 2) {
+    rankExplanation = "**Ranked #2** — strong alternative worth comparing to the top option.";
+  } else if (rank === 3) {
+    rankExplanation = "**Ranked #3** — notable for specific strengths detailed below.";
+  }
+
+  const allPoints = rankExplanation ? [rankExplanation, ...highlights] : highlights;
+  return allPoints.join("\n");
 }
 
 // ============================================================================
@@ -771,12 +1044,12 @@ function generateEmergencyResponse(message) {
   return {
     role: "assistant",
     isEmergency: true,
-    content: `⚠️ **Potential Emergency Detected**
+    content: `⚠️ **This could be a medical emergency**
 
 Your message mentions "${triggeredKeyword}", which may indicate an urgent medical situation.
 
 **Immediate steps:**
-• **Call emergency services now:** Dial **112** (national) or **102/108** (ambulance) in India.
+• **Call emergency services now:** Dial **108** or **112** in India.
 • Go to the **nearest hospital emergency department** immediately.
 • Do NOT delay seeking care to compare hospitals or treatment costs.
 
@@ -793,12 +1066,20 @@ Once the urgent situation is addressed, I can help you find appropriate hospital
 }
 
 function generateHospitalSearchResponse(context, preferences) {
-  const diseaseId = context.diseaseId || "dis_cabg";
+  // === STEP 1: Check if we need more information before showing hospitals ===
+  const nextQuestion = getNextRequiredQuestion(context);
+  if (nextQuestion) {
+    return generateClarificationResponse(context, preferences, nextQuestion);
+  }
+
+  // === STEP 2: We have enough — search and show hospitals ===
+  const diseaseId = context.diseaseId || null;
   const rawHospitals = toolSearchHospitals({
     disease: diseaseId,
     treatment: context.treatmentId,
     budget: context.budget,
     location: context.location,
+    speciality: context.speciality,
     governmentScheme: context.governmentScheme,
     ownershipPreference: preferences.ownershipPreference
   });
@@ -806,44 +1087,47 @@ function generateHospitalSearchResponse(context, preferences) {
   // Apply preference-aware ranking cascade
   const rankedHospitals = rankHospitalsWithPreferences(rawHospitals, context, preferences);
 
-  const disease = seedData.diseases.find(d => d.id === diseaseId);
+  const disease = diseaseId ? seedData.diseases.find(d => d.id === diseaseId) : null;
   const diseaseName = disease?.name || context.disease || context.speciality || "the specified condition";
-  const followUp = generateFollowUpQuestion(context, "hospital_search");
 
   let content = "";
   if (rankedHospitals.length > 0) {
-    content = `I found **${rankedHospitals.length} hospitals** with documented treatment capability for **${diseaseName}**`;
-    if (context.location) content += ` in the **${context.location}** region`;
-    if (context.budget) content += ` within your budget ceiling of **₹${(context.budget).toLocaleString("en-IN")}**`;
+    const hasLocationFallback = rawHospitals.some(h => h.locationSearchFallback);
+    content = `I found **${rankedHospitals.length} hospitals** for **${diseaseName}**`;
+    if (context.location) content += ` in or near **${context.location}**`;
+    if (context.budget) content += `, within your budget of **₹${(context.budget).toLocaleString("en-IN")}**`;
     content += ".\n\n";
 
-    // Explain personalization if active (Requirement 8)
+    if (hasLocationFallback) {
+      content += `> ⚠️ I could not find disease-specific records strictly in **${context.location}**, so I've included regional directory listings. Their clinical outcomes and exact prices are marked unavailable until verified.\n\n`;
+    }
+
     if (preferences.lastPersonalizationExplanation) {
-      content += `💡 **Personalized Ranking Applied:** ${preferences.lastPersonalizationExplanation}\n\n`;
+      content += `💡 **Ranking personalized:** ${preferences.lastPersonalizationExplanation}\n\n`;
     }
 
-    content += "I'm comparing them using disease-specific evidence: verified clinical outcome rates, documented patient volumes, and statutory cost returns.\n\n";
+    content += "Results are ranked by verified clinical outcome data, documented patient volumes, accreditation level, and your stated preferences — not by advertisements.\n\n";
 
-    if (context.budget && rankedHospitals.some(h => h.cost?.costType?.includes("PM-JAY"))) {
-      content += "**Note:** Some hospitals participate in PM-JAY, offering subsidized or cashless coverage for eligible citizens.\n\n";
-    }
-
-    // Summarize missing outcome data warning (Requirement 9)
+    // Data completeness warning
     const withOutcomes = rankedHospitals.filter(h => h.outcome);
     if (withOutcomes.length > 0 && withOutcomes.length < rankedHospitals.length) {
       const without = rankedHospitals.length - withOutcomes.length;
-      content += `⚠️ **${without} of ${rankedHospitals.length}** hospitals do not have publicly verified disease-specific outcome data in the registry. Their outcome fields show "Unavailable" — missing data is never converted to zero.`;
+      content += `> ℹ️ **${without} of ${rankedHospitals.length}** hospitals shown don't have publicly verified disease-specific outcome data — their outcome fields show "Unavailable". Missing data is never converted to zero.\n\n`;
     }
   } else {
-    content = `I could not find hospitals with verified records for **${diseaseName}** matching all your constraints. Try broadening your budget or location range.`;
+    content = `I couldn't find hospitals with verified records for **${diseaseName}**`;
+    if (context.location) content += ` in **${context.location}**`;
+    content += ". Try broadening your location or budget, or describe the condition differently.";
   }
 
-  if (followUp) {
-    content += "\n\n" + followUp;
+  // Optional follow-up appended AFTER results (doesn't block showing hospitals)
+  const followUp = getOptionalFollowUp(context);
+  if (followUp && rankedHospitals.length > 0) {
+    content += "\n\n---\n\n" + followUp;
   }
 
-  // Build result cards (with relevanceScore and rankingRationale)
-  const resultCards = rankedHospitals.slice(0, 5).map(h => ({
+  // Build rich result cards with significance
+  const resultCards = rankedHospitals.slice(0, 5).map((h, idx) => ({
     id: h.id,
     name: h.canonicalName,
     location: h.locationName,
@@ -851,14 +1135,17 @@ function generateHospitalSearchResponse(context, preferences) {
     ownership: h.ownership,
     relevanceScore: h.relevanceScore,
     rankingRationale: h.rankingRationale,
-    diseaseMatch: true,
+    diseaseMatch: Boolean(h.outcome || h.cost),
     outcome: h.outcome ? `${h.outcome.mortalityRate30Day}% (30-day mortality)` : "Unavailable",
     outcomeDelta: h.outcome?.mortalityBenchmarkDelta ?? null,
     volume: h.outcome ? `${h.outcome.annualVolume.toLocaleString()} patients/yr` : "Unavailable",
     costRange: h.cost ? `₹${h.cost.minAmount.toLocaleString("en-IN")} – ₹${h.cost.maxAmount.toLocaleString("en-IN")}` : "Unavailable",
     costType: h.cost ? COST_TYPES[h.cost.costType?.toLowerCase()?.replace(/[^a-z_]/g, "_")] || h.cost.costType : null,
-    dataConfidence: h.confidenceScore >= 95 ? "VERIFIED_PRIMARY" : h.confidenceScore >= 85 ? "VERIFIED_SECONDARY" : "HOSPITAL_REPORTED",
-    accreditation: h.accreditationTier
+    dataConfidence: h.outcome || h.cost
+      ? (h.confidenceScore >= 95 ? "VERIFIED_PRIMARY" : h.confidenceScore >= 85 ? "VERIFIED_SECONDARY" : "HOSPITAL_REPORTED")
+      : "UNAVAILABLE",
+    accreditation: h.accreditationTier,
+    significance: explainHospitalSignificance(h, context, idx + 1)
   }));
 
   // Collect sources
@@ -872,6 +1159,11 @@ function generateHospitalSearchResponse(context, preferences) {
     return src ? { id: src.id, label: src.title, publisher: src.publisher, period: src.reportingPeriod, status: src.verificationStatus } : null;
   }).filter(Boolean);
 
+  // Track that we've asked about urgency (as follow-up)
+  const updatedAskedAbout = followUp
+    ? [...(context.askedAbout || []), "urgency"]
+    : context.askedAbout;
+
   return {
     role: "assistant",
     isEmergency: false,
@@ -879,6 +1171,7 @@ function generateHospitalSearchResponse(context, preferences) {
     personalizationNote: preferences.lastPersonalizationExplanation || null,
     extractedContext: {
       ...context,
+      askedAbout: updatedAskedAbout,
       preferences
     },
     resultCards,
@@ -889,37 +1182,106 @@ function generateHospitalSearchResponse(context, preferences) {
 }
 
 function generateIncompleteSearchResponse(context, message, preferences) {
+  // Even for incomplete search, try to gather the minimum required info
+  const nextQuestion = getNextRequiredQuestion(context);
+  if (nextQuestion) {
+    return generateClarificationResponse(context, preferences, nextQuestion);
+  }
+
+  // If we have enough, show hospitals for the speciality
+  if (context.speciality || context.diseaseId) {
+    return generateHospitalSearchResponse(context, preferences);
+  }
+
   let symptomArea = context.conditionContext || "your condition";
   let suggestedSpeciality = context.speciality || "relevant diagnostic and treatment";
 
-  let content = `There can be several medical conditions related to ${symptomArea} issues. I can help you find hospitals with accredited **${suggestedSpeciality}** services`;
-  if (context.location) content += ` near **${context.location}**`;
-  content += ".\n\n";
+  let content = `I can see you're dealing with something related to ${symptomArea}. Let me help you find the right hospitals.\n\n`;
+  content += "**Note:** I can't diagnose from symptoms, but I can match you with accredited hospitals once I know the condition or treatment needed.\n\n";
 
-  content += "**Clinical Guardrail:** I cannot infer a specific diagnosis or disease severity from natural-language symptoms. If you have:\n";
-  content += "• A **formal diagnosis** from your physician\n";
-  content += "• An **investigation report** (e.g., angiography, biopsy, MRI)\n";
-  content += "• A **recommended procedure name** (e.g., CABG, TKR)\n\n";
-  content += "Please share it — I can then benchmark specific outcome rates and cost schedules.\n\n";
-  content += "In the meantime, I can show leading accredited facilities in this speciality based on verified clinical infrastructure and volumes.";
-
-  const followUp = generateFollowUpQuestion(context, "incomplete_search");
-  if (followUp) content += "\n\n" + followUp;
+  if (!context.diseaseId && !context.speciality) {
+    content += "**To get started, please share:**\n";
+    content += "• The condition or diagnosis you've received (e.g., 'CABG', 'knee replacement', 'kidney dialysis')\n";
+    content += "• Or the body system/area involved (e.g., 'heart', 'knee', 'kidney', 'brain')\n\n";
+    content += "Once I know that, I'll ask about your city and then show you verified hospital options with detailed reasoning.";
+  }
 
   return {
     role: "assistant",
     isEmergency: false,
     content,
     personalizationNote: preferences.lastPersonalizationExplanation || null,
-    extractedContext: {
-      ...context,
-      preferences
-    },
+    extractedContext: { ...context, preferences },
     resultCards: [],
     schemeCards: [],
     sources: [],
-    followUpQuestion: followUp
+    followUpQuestion: "What condition, diagnosis, or body area are you seeking treatment for?"
   };
+}
+
+function createResponse(content, context, preferences, extra = {}) {
+  return {
+    role: "assistant",
+    isEmergency: false,
+    content,
+    personalizationNote: preferences.lastPersonalizationExplanation || null,
+    extractedContext: { ...context, preferences },
+    resultCards: [],
+    schemeCards: [],
+    sources: [],
+    followUpQuestion: null,
+    ...extra
+  };
+}
+
+function generateSpecialityDiscoveryResponse(context, preferences) {
+  return createResponse(
+    "I can help narrow the service area, but I cannot determine a diagnosis from symptoms alone.\n\n" +
+    "Share the confirmed diagnosis, investigation report summary, or the main body system involved. Common starting points include:\n" +
+    "• Heart or circulation: Cardiology\n" +
+    "• Brain, nerves, or movement: Neurology\n" +
+    "• Kidney or urinary concerns: Nephrology / Urology\n" +
+    "• Digestive or liver concerns: Gastroenterology\n" +
+    "• Breathing or lung concerns: Pulmonology\n\n" +
+    "A clinician should confirm which specialty is appropriate. Once you share a confirmed condition or specialty, I can search the MedScout registry.",
+    context,
+    preferences
+  );
+}
+
+function generateHealthInfoResponse(context, message, preferences) {
+  const disease = context.diseaseId ? seedData.diseases.find(item => item.id === context.diseaseId) : null;
+  const topic = disease?.name || context.conditionContext || "these symptoms";
+  let content = `### Health information: ${topic}\n\n`;
+  content += "I can provide general information, but this is not a diagnosis and cannot replace an in-person assessment.\n\n";
+  if (disease) {
+    content += `${disease.description}\n\n`;
+    content += `**Common areas clinicians consider:** ${disease.commonConditions?.join(", ") || "a condition-specific assessment"}.\n\n`;
+    content += `**Typical care pathway:** ${disease.carePathways?.join(" → ") || "history, examination, appropriate testing, and follow-up"}.\n\n`;
+  } else {
+    content += "Symptoms can have several possible causes. A clinician would use duration, severity, associated symptoms, examination, and tests to determine which possibilities apply.\n\n";
+    content += "For a more useful explanation, share how long this has been happening, how severe it is, and any associated symptoms.\n\n";
+  }
+  content += "Do not use the chatbot to interpret a scan, lab result, or prescription. Please ask the treating clinician or pharmacist to interpret those for you.\n\n";
+  content += "If symptoms are severe, rapidly worsening, or include emergency warning signs, seek urgent care instead of waiting for an online answer.\n\n";
+
+  // After health info, ask if they want hospitals
+  if (context.diseaseId || context.speciality) {
+    content += "\n\n---\n\n**Would you like me to find hospitals** specializing in this condition? If yes, just tell me which **city or area** you're in.";
+  } else {
+    content += `To tailor the next suggestion, you can tell me ${!context.ageGroup ? "the person's age group" : "whether this is planned or needed soon"}. You can skip that question.\n\n`;
+    content += "Would you like general information refined further, or should I find hospitals for a confirmed condition?";
+  }
+  return createResponse(content, context, preferences);
+}
+
+function generateDataGapResponse(context, message, preferences) {
+  const hospital = seedData.hospitals.find(item => message.toLowerCase().includes(item.canonicalName.toLowerCase().split(" ")[0].toLowerCase()));
+  const label = hospital?.canonicalName || "this hospital";
+  const content = `### Why data may be unavailable\n\n${label} does not have a comparable disease-specific outcome or cost record for the requested query in the current MedScout registry.\n\n` +
+    "Unavailable does not mean zero, poor quality, or treatment failure. It means MedScout could not verify a comparable value from the available source records.\n\n" +
+    "You can compare hospitals using the fields that are published, request the hospital's current tariff and outcome definitions, or broaden the search to facilities with verified records.";
+  return createResponse(content, context, preferences);
 }
 
 function generateComparisonResponse(context, preferences) {
@@ -957,6 +1319,12 @@ function generateComparisonResponse(context, preferences) {
   // Personalization note in comparison
   if (preferences.lastPersonalizationExplanation) {
     content += `💡 **Personalized Trade-off Context:** ${preferences.lastPersonalizationExplanation}\n\n`;
+  }
+  if (context.location) {
+    content += `I'm comparing these options for **${context.location}** where location data is available.\n\n`;
+  }
+  if (context.comparisonPriorities?.length > 0) {
+    content += `Your comparison priorities: **${context.comparisonPriorities.join(" > ")}**.\n\n`;
   }
 
   // Build comparison table
@@ -1015,6 +1383,17 @@ function generateComparisonResponse(context, preferences) {
       ...context,
       preferences
     },
+    comparisonCards: comparison.map(h => ({
+      id: h.id,
+      name: h.name,
+      location: h.location,
+      ownership: h.ownership,
+      annualVolume: h.annualVolume,
+      mortalityRate: h.mortalityRate,
+      costRange: h.costMin !== null ? `₹${h.costMin.toLocaleString("en-IN")} – ₹${h.costMax.toLocaleString("en-IN")}` : "Unavailable",
+      distance: h.distance,
+      confidence: DATA_CONFIDENCE_LEVELS[h.dataConfidence]?.label || h.dataConfidence
+    })),
     resultCards: [],
     schemeCards: [],
     sources,
@@ -1023,6 +1402,12 @@ function generateComparisonResponse(context, preferences) {
 }
 
 function generateCostResponse(context, preferences) {
+  // If no disease context, ask first
+  if (!context.diseaseId && !context.speciality) {
+    const nextQ = getNextRequiredQuestion(context);
+    if (nextQ) return generateClarificationResponse(context, preferences, nextQ);
+  }
+
   const diseaseId = context.diseaseId || "dis_cabg";
   const disease = seedData.diseases.find(d => d.id === diseaseId);
   const allCosts = seedData.costs.filter(c => c.diseaseId === diseaseId);
@@ -1217,7 +1602,7 @@ function generateGovernmentSchemeResponse(context, message, preferences) {
       preferences
     },
     resultCards: [],
-    schemeCards,
+    schemeCards: [],
     sources: [],
     followUpQuestion: null
   };
@@ -1257,7 +1642,7 @@ function generateEvidenceResponse(context, preferences) {
       preferences
     },
     resultCards: [],
-    schemeCards,
+    schemeCards: [],
     sources,
     followUpQuestion: null
   };
@@ -1294,6 +1679,14 @@ export function processChatMessage(message, sessionState = {}) {
   // 3. Extract entities AND learn user preferences (accumulating session state)
   const { context, preferences, turnCount } = extractContextAndPreferences(msg, sessionState);
 
+  // Carry forward askedAbout from previous session to prevent repeated questions
+  if (sessionState?.context?.askedAbout) {
+    context.askedAbout = [...new Set([...(context.askedAbout || []), ...sessionState.context.askedAbout])];
+  }
+  if (sessionState?.extractedContext?.askedAbout) {
+    context.askedAbout = [...new Set([...(context.askedAbout || []), ...sessionState.extractedContext.askedAbout])];
+  }
+
   // 4. Route to intent handler
   switch (intent) {
     case "hospital_search":
@@ -1316,6 +1709,15 @@ export function processChatMessage(message, sessionState = {}) {
 
     case "evidence_question":
       return generateEvidenceResponse(context, preferences);
+
+    case "speciality_discovery":
+      return generateSpecialityDiscoveryResponse(context, preferences);
+
+    case "health_info":
+      return generateHealthInfoResponse(context, msg, preferences);
+
+    case "data_gap":
+      return generateDataGapResponse(context, msg, preferences);
 
     default:
       return generateHospitalSearchResponse(context, preferences);

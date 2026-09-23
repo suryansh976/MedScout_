@@ -12,22 +12,17 @@ export default function Footer({ onNavigateTab }) {
               <div className="w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center">
                 <Activity className="w-4 h-4" />
               </div>
-              <span className="font-headline font-bold text-base text-on-surface">
-                MedScout Evidence Platform
-              </span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-secondary-container text-secondary uppercase">
-                Clinical Grade
-              </span>
+              <span className="font-headline font-bold text-base text-on-surface">MedScout</span>
             </div>
             <p className="text-tertiary leading-relaxed max-w-lg">
-              Public clinical statistical data referenced from ABDM HFR, MoHFW, PM-JAY package guidelines, ICMR, and NABH standards. Data is verified per clinical establishment reporting cycles. Not an emergency dispatch service.
+              Our data comes from official government health sources including ABDM, PM-JAY, and NABH. This is not an emergency medical service — in an emergency, call 108.
             </p>
           </div>
 
           {/* Governance Col */}
           <div className="space-y-2.5">
             <span className="font-bold text-tertiary uppercase tracking-wider block text-[11px]">
-              Governance & Audits
+              How We Verify Data
             </span>
             <ul className="space-y-2 text-on-surface-variant">
               <li>
@@ -51,7 +46,7 @@ export default function Footer({ onNavigateTab }) {
           {/* Stakeholders Col */}
           <div className="space-y-2.5">
             <span className="font-bold text-tertiary uppercase tracking-wider block text-[11px]">
-              Stakeholders
+              About
             </span>
             <ul className="space-y-2 text-on-surface-variant">
               <li>

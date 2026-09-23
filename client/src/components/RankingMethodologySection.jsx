@@ -6,9 +6,9 @@ export default function RankingMethodologySection({ onReadMethodology }) {
     {
       step: "01 / BASELINE",
       icon: CheckSquare,
-      title: "Strict Statutory Eligibility",
-      description: "Active registration in the National ABDM Health Facility Registry (HFR) and adherence to Clinical Establishments Act rules.",
-      tag: "Binary Gate (Pass/Fail)",
+      title: "Must be officially registered — no exceptions",
+      description: "We check active registration in the national ABDM Health Facility Registry (HFR) and applicable establishment rules.",
+      tag: "Required first",
       isGate: true
     },
     {
@@ -22,7 +22,7 @@ export default function RankingMethodologySection({ onReadMethodology }) {
     {
       step: "03 / OUTCOMES",
       icon: Activity,
-      title: "Validated Procedure Volumes",
+      title: "Proven Track Record",
       description: "Documented annual caseload thresholds. Higher specific case volume strongly correlates with lower complication incidence.",
       tag: "Weight: 30%",
       isGate: false
@@ -30,7 +30,7 @@ export default function RankingMethodologySection({ onReadMethodology }) {
     {
       step: "04 / INTEGRITY",
       icon: FileSpreadsheet,
-      title: "Itemized Cost Disclosures",
+      title: "Honest Pricing",
       description: "Transparent standard package rates vs final billing consistency audited via PM-JAY claim databases and commercial TPAs.",
       tag: "Weight: 25%",
       isGate: false
@@ -54,7 +54,7 @@ export default function RankingMethodologySection({ onReadMethodology }) {
             MedScout Audit Standards
           </span>
           <h2 className="font-headline font-extrabold text-3xl sm:text-4xl text-on-surface tracking-tight">
-            How MedScout Indexes & Ranks
+            How We Rank Hospitals
           </h2>
           <p className="text-sm sm:text-base text-tertiary leading-relaxed">
             Commercial hospital discovery engines monetize sponsored priority placements. MedScout enforces an uncompromised 5-tier open-source algorithm based strictly on documented health registries.
@@ -103,7 +103,7 @@ export default function RankingMethodologySection({ onReadMethodology }) {
             </div>
             <div>
               <h3 className="font-headline font-bold text-base text-on-surface">
-                Statutory Anti-Advertising Pledge
+                Our Promise: No Paid Rankings
               </h3>
               <p className="text-xs text-tertiary">
                 No hospital or healthcare corporation can purchase priority ranking, promote listings, or edit registry records on MedScout.

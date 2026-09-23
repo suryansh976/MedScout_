@@ -102,7 +102,7 @@ export default function AuthModal({ isOpen, onClose, defaultTab = "signin", onSu
       setLocalError("Please enter your email and password.");
       return;
     }
-    const result = await login(signInForm.email, signInForm.password);
+    const result = await login(signInForm.email, signInForm.password, signInForm.remember);
     if (result.success) {
       setSuccessMsg(`Welcome back, ${result.user.name}!`);
       setTimeout(() => {
@@ -170,7 +170,7 @@ export default function AuthModal({ isOpen, onClose, defaultTab = "signin", onSu
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[200] flex min-h-screen items-center justify-center overflow-y-auto p-4 sm:p-6">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -180,7 +180,7 @@ export default function AuthModal({ isOpen, onClose, defaultTab = "signin", onSu
       {/* Modal */}
       <div
         ref={modalRef}
-        className="relative w-full max-w-md bg-white/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-white/60 overflow-hidden animate-[fadeInScale_0.2s_ease-out]"
+        className="relative my-auto max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-white/60 bg-white/95 shadow-2xl backdrop-blur-2xl animate-[fadeInScale_0.2s_ease-out] sm:max-h-[calc(100vh-3rem)]"
         style={{ animation: "fadeInScale 0.2s ease-out" }}
       >
         {/* Header gradient bar */}
@@ -309,6 +309,16 @@ export default function AuthModal({ isOpen, onClose, defaultTab = "signin", onSu
                 </div>
               </div>
 
+              <label className="flex items-center gap-2 text-xs text-on-surface-variant cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={signInForm.remember}
+                  onChange={e => setSignInForm(p => ({ ...p, remember: e.target.checked }))}
+                  className="w-4 h-4 rounded accent-primary"
+                />
+                Remember me
+              </label>
+
               {/* Submit */}
               <button
                 type="submit"
@@ -341,6 +351,13 @@ export default function AuthModal({ isOpen, onClose, defaultTab = "signin", onSu
                 </svg>
                 Continue with Google
               </button>
+
+              <p className="text-center text-xs text-on-surface-variant">
+                Don&apos;t have an account?{" "}
+                <button type="button" onClick={() => setTab("register")} className="text-primary font-semibold hover:underline">
+                  Create Account
+                </button>
+              </p>
 
               {/* Demo accounts hint */}
               {showDemoHint && (
@@ -551,6 +568,21 @@ export default function AuthModal({ isOpen, onClose, defaultTab = "signin", onSu
                 {loading ? "Creating account…" : "Create Account"}
                 {!loading && <ArrowRight className="w-4 h-4" />}
               </button>
+
+              <button
+                type="button"
+                className="w-full flex items-center justify-center gap-2.5 py-2.5 rounded-xl border border-surface-container-high bg-white text-sm font-medium text-on-surface hover:bg-surface-container-low transition-colors"
+              >
+                <span className="font-bold text-primary">G</span>
+                Continue with Google
+              </button>
+
+              <p className="text-center text-xs text-on-surface-variant">
+                Already have an account?{" "}
+                <button type="button" onClick={() => setTab("signin")} className="text-primary font-semibold hover:underline">
+                  Sign In
+                </button>
+              </p>
             </form>
           )}
 

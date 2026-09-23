@@ -175,6 +175,8 @@ export function consumeRefreshToken(token) {
     refreshTokens.delete(token);
     return null;
   }
+  // Refresh tokens are single-use so rotation also prevents replay.
+  refreshTokens.delete(token);
   return entry.userId;
 }
 

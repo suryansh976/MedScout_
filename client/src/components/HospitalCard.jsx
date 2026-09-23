@@ -20,13 +20,15 @@ export default function HospitalCard({
     accreditationTier,
     image,
     outcome,
-    cost
+    cost,
+    registryStatus,
+    directorySource
   } = hospital;
 
   const annualVolume = outcome?.annualVolume ? outcome.annualVolume.toLocaleString() : "Unavailable";
   const mortalityRate = outcome?.mortalityRate30Day ? `${outcome.mortalityRate30Day}%` : "Unavailable";
   const mortalityDelta = outcome?.mortalityBenchmarkDelta || "Standard Clinical Threshold";
-  const volumeTag = outcome?.annualVolume > 3000 ? "Highest State Volume" : "MoHFW Verified 2024";
+  const volumeTag = outcome?.annualVolume > 3000 ? "Highest documented volume" : "Verified record";
 
   const minCost = cost ? `₹${(cost.minAmount).toLocaleString("en-IN")}` : "Unavailable";
   const maxCost = cost ? `₹${(cost.maxAmount).toLocaleString("en-IN")}` : "";
@@ -71,6 +73,12 @@ export default function HospitalCard({
           {ownership}
         </span>
       </div>
+
+      {registryStatus === "DIRECTORY_ONLY" && (
+        <div className="bg-warning-light px-4 py-2 text-[11px] font-semibold text-warning">
+          Directory listing only • clinical outcomes and tariffs unavailable
+        </div>
+      )}
 
       {/* Hospital Image with Accreditation Overlay */}
       <div className="relative h-44 w-full bg-surface-container overflow-hidden">
@@ -120,7 +128,7 @@ export default function HospitalCard({
             {/* Annual Volume */}
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-tertiary uppercase tracking-wider">
-                Annual CABG Volume
+                Surgeries performed per year
               </span>
               <span className="font-display font-extrabold text-xl text-on-surface mt-0.5">
                 {annualVolume}
@@ -133,8 +141,8 @@ export default function HospitalCard({
 
             {/* 30-Day Mortality */}
             <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-tertiary uppercase tracking-wider">
-                30-Day Mortality Rate
+                <span className="text-[10px] font-bold text-tertiary uppercase tracking-wider" title="Percentage of patients who died within 30 days of the surgery.">
+                  30-Day Mortality Rate (?)
               </span>
               <span className="font-display font-extrabold text-xl text-on-surface mt-0.5">
                 {mortalityRate}
@@ -150,7 +158,7 @@ export default function HospitalCard({
           <div className="mt-4 p-3 rounded-xl bg-surface-container-low/80 border border-surface-container-high/70 space-y-2">
             <div className="flex items-center justify-between text-[11px]">
               <span className="font-bold text-tertiary uppercase tracking-wider">
-                Documented Standard Package
+                Typical cost
               </span>
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-secondary-container text-secondary">
                 {cost?.confidenceText?.includes("100%") ? "Statutory Public" : "High Confidence"}
@@ -175,7 +183,7 @@ export default function HospitalCard({
             </div>
 
             <p className="text-[11px] text-tertiary leading-tight">
-              {confidenceText}
+              {registryStatus === "DIRECTORY_ONLY" ? directorySource : confidenceText.replace("reported episodes settled within this bandwidth", "patients paid within this range")}
             </p>
           </div>
         </div>

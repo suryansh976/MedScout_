@@ -25,7 +25,7 @@ export default function ProfilePage() {
     if (data[3].success) setPreferences(data[3].data);
   };
 
-  useEffect(() => { loadData().catch(() => setMessage("Unable to load profile data.")); }, []);
+  useEffect(() => { loadData().catch(() => setMessage("Unable to load profile data.")); }, [authFetch]);
 
   const updateProfile = async (event) => {
     event.preventDefault();
@@ -63,8 +63,8 @@ export default function ProfilePage() {
         </form>
         <form onSubmit={savePreferences} className="space-y-4 rounded-2xl border border-surface-container-high bg-white p-5 shadow-sm">
           <h2 className="font-headline text-lg font-bold">Preferences</h2>
-          <label className="block text-sm font-semibold">Location<input value={preferences.location?.value || ""} onChange={event => setPreferences({ ...preferences, location: event.target.value })} className="mt-1 w-full rounded-lg border border-surface-container-high p-2.5 font-normal" /></label>
-          <label className="block text-sm font-semibold">Maximum distance (km)<input type="number" value={preferences.maxDistance?.value || ""} onChange={event => setPreferences({ ...preferences, maxDistance: event.target.value })} className="mt-1 w-full rounded-lg border border-surface-container-high p-2.5 font-normal" /></label>
+          <label className="block text-sm font-semibold">Location<input value={preferences.location?.value || ""} onChange={event => setPreferences({ ...preferences, location: { value: event.target.value } })} className="mt-1 w-full rounded-lg border border-surface-container-high p-2.5 font-normal" /></label>
+          <label className="block text-sm font-semibold">Maximum distance (km)<input type="number" value={preferences.maxDistance?.value || ""} onChange={event => setPreferences({ ...preferences, maxDistance: { value: event.target.value } })} className="mt-1 w-full rounded-lg border border-surface-container-high p-2.5 font-normal" /></label>
           <button className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white"><Save className="h-4 w-4" /> Save preferences</button>
         </form>
       </div>

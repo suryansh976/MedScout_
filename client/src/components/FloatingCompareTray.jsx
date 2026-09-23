@@ -17,10 +17,10 @@ export default function FloatingCompareTray({ queuedHospitals, onClear, onOpenCo
           <div className="flex flex-col min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-display font-bold text-sm text-on-surface">
-                Comparison Queue
+                Comparing {queuedHospitals.length} {queuedHospitals.length === 1 ? "hospital" : "hospitals"}
               </span>
               <span className="px-2 py-0.5 rounded-full bg-secondary-container text-secondary text-[11px] font-bold">
-                {queuedHospitals.length} {queuedHospitals.length === 1 ? "Facility" : "Facilities"} Queued
+                {queuedHospitals.length} selected
               </span>
             </div>
             <p className="text-xs text-on-surface-variant truncate">

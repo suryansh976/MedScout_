@@ -19,8 +19,11 @@ import {
   Check,
   MapPin,
   IndianRupee,
-  Layers
+  Layers,
+  Mic,
+  MicOff
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext.jsx";
 
 export default function AIChatbotDrawer({
   isOpen,
@@ -29,6 +32,7 @@ export default function AIChatbotDrawer({
   onViewHospital,
   onQueueHospital
 }) {
+  const { authFetch } = useAuth();
   // Session-scoped state (Requirement 10: Session-only memory)
   const [sessionState, setSessionState] = useState({
     context: {},
@@ -45,9 +49,7 @@ export default function AIChatbotDrawer({
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      content: `Hello. I am the MedScout Clinical Reasoning Assistant. I can help you find and compare hospitals for planned procedures grounded strictly in statutory registry evidence.
-
-You can state your condition, location, budget, or explicit priorities (e.g., *"I care more about treatment success rate than distance"* or *"I prefer government hospitals"*).`,
+      content: "Hi — tell me what's going on: your condition or symptoms, where you're located, and your budget, and I'll find matching hospitals.",
       personalizationNote: null,
       extractedContext: null,
       resultCards: [],
@@ -58,12 +60,71 @@ You can state your condition, location, budget, or explicit priorities (e.g., *"
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [aiStatus, setAiStatus] = useState(null);
   const [showMemoryPanel, setShowMemoryPanel] = useState(false);
   const messagesEndRef = useRef(null);
+  const recognitionRef = useRef(null);
+
+  const requestLocation = () => {
+    if (!navigator.geolocation) {
+      setMessages(prev => [...prev, { role: "assistant", content: "Location access is not available in this browser. Tell me your city or area instead.", resultCards: [], schemeCards: [], sources: [] }]);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const { latitude, longitude } = coords;
+        const location = latitude > 28.2 && latitude < 30.2 && longitude > 76.5 && longitude < 78.5
+          ? "New Delhi NCR"
+          : latitude > 30.4 && latitude < 31.2 && longitude > 75.4 && longitude < 77.2
+            ? "Chandigarh"
+            : null;
+        setSessionState(previous => ({
+          ...previous,
+          context: { ...previous.context, location: location || previous.context.location || "Current area", locationPermission: "granted" }
+        }));
+        setMessages(prev => [...prev, { role: "assistant", content: location ? `Thanks — I’ll use **${location}** as your search area. You can change it or say “forget my location” at any time.` : "Thanks — location access is on, but I could not map it to a supported search region. Please tell me your city or area instead.", resultCards: [], schemeCards: [], sources: [] }]);
+      },
+      () => setMessages(prev => [...prev, { role: "assistant", content: "I could not access your location. You can keep location private and tell me your city or area manually instead.", resultCards: [], schemeCards: [], sources: [] }]),
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+    );
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch("/api/chat/status")
+      .then(response => response.json())
+      .then(data => { if (data.success) setAiStatus(data.data); })
+      .catch(() => setAiStatus({ provider: "local" }));
+  }, [isOpen]);
+
+  const toggleVoiceInput = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-IN";
+    recognition.interimResults = false;
+    recognition.onresult = event => {
+      setInput(previous => `${previous} ${event.results[0][0].transcript}`.trim());
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  };
 
   if (!isOpen) return null;
 
@@ -103,7 +164,7 @@ You can state your condition, location, budget, or explicit priorities (e.g., *"
     setLoading(true);
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await authFetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -189,7 +250,7 @@ You can state your condition, location, budget, or explicit priorities (e.g., *"
                 MedScout Clinical AI Assistant
               </h2>
               <span className="text-[10px] text-secondary bg-white/10 px-1.5 py-0.5 rounded font-mono">
-                Adaptive Reasoning
+                {aiStatus?.provider === "openai" ? `OpenAI ${aiStatus.model}` : "Local fallback"}
               </span>
             </div>
             <p className="text-[11px] text-white/70">
@@ -278,6 +339,11 @@ You can state your condition, location, budget, or explicit priorities (e.g., *"
             )}
           </div>
 
+          <div className="flex flex-wrap items-center gap-2 border-t border-surface-container-high pt-2.5">
+            <button onClick={requestLocation} className="rounded-lg bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-white">Use my location</button>
+            <span className="text-[10px] text-tertiary">Optional. MedScout uses a coarse supported region for hospital matching and does not store coordinates.</span>
+          </div>
+
           <p className="text-[10px] text-tertiary">
             Preferences apply to this current browser session only and never modify underlying registry data.
           </p>
@@ -325,6 +391,43 @@ You can state your condition, location, budget, or explicit priorities (e.g., *"
               <div className="whitespace-pre-line space-y-2">
                 {msg.content}
               </div>
+
+              {msg.comparisonCards && msg.comparisonCards.length > 0 && (
+                <div className="mt-4 overflow-hidden rounded-xl border border-primary/20 bg-surface-container-low">
+                  <div className="flex items-center justify-between gap-3 border-b border-primary/15 bg-primary/5 px-3 py-2.5">
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-primary">
+                      <Layers className="h-3.5 w-3.5" /> Criteria-based comparison
+                    </span>
+                    <span className="text-[10px] text-tertiary">No universal best hospital</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[620px] w-full border-collapse text-[10px]">
+                      <thead>
+                        <tr className="border-b border-surface-container-high bg-white/70 text-left">
+                          <th className="p-2.5 font-bold text-tertiary">Measure</th>
+                          {msg.comparisonCards.map(hospital => <th key={hospital.id} className="min-w-[145px] p-2.5 font-bold text-on-surface">{hospital.name}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-surface-container-high/70">
+                        {[
+                          ["Ownership", hospital => hospital.ownership],
+                          ["Annual volume", hospital => hospital.annualVolume ? `${hospital.annualVolume.toLocaleString("en-IN")} cases` : "Unavailable"],
+                          ["30-day mortality", hospital => hospital.mortalityRate !== null ? `${hospital.mortalityRate}%` : "Unavailable"],
+                          ["Documented cost", hospital => hospital.costRange],
+                          ["Distance", hospital => `${hospital.distance} km`],
+                          ["Evidence", hospital => hospital.confidence]
+                        ].map(([label, value]) => (
+                          <tr key={label} className="bg-white/50">
+                            <th className="p-2.5 text-left font-semibold text-tertiary">{label}</th>
+                            {msg.comparisonCards.map(hospital => <td key={hospital.id} className="p-2.5 font-medium text-on-surface-variant">{value(hospital)}</td>)}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="border-t border-primary/10 px-3 py-2 text-[10px] text-tertiary">MedScout compares the evidence against your stated priorities. Historical registry figures do not guarantee individual outcomes.</p>
+                </div>
+              )}
 
               {/* Result Cards Inline (Grounded Hospitals) */}
               {msg.resultCards && msg.resultCards.length > 0 && (
@@ -385,6 +488,12 @@ You can state your condition, location, budget, or explicit priorities (e.g., *"
                               </span>
                             ))}
                           </div>
+                        )}
+
+                        {h.significance && (
+                          <p className="rounded-lg border border-primary/10 bg-primary/5 p-2 text-[10px] leading-relaxed text-on-surface-variant">
+                            <span className="font-bold text-primary">Why this appears: </span>{h.significance}
+                          </p>
                         )}
 
                         {/* Metrics Grid */}
@@ -571,6 +680,16 @@ You can state your condition, location, budget, or explicit priorities (e.g., *"
             placeholder="Type condition, budget, or preferences (e.g. success rate > distance)..."
             className="flex-1 py-2.5 px-3.5 rounded-xl bg-surface-container-low border border-surface-container-high text-xs sm:text-sm text-on-surface placeholder:text-outline focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary/20"
           />
+          <button
+            type="button"
+            onClick={toggleVoiceInput}
+            disabled={!window.SpeechRecognition && !window.webkitSpeechRecognition}
+            title={isListening ? "Stop voice input" : "Use voice input"}
+            aria-label={isListening ? "Stop voice input" : "Use voice input"}
+            className={`p-2.5 rounded-xl border border-surface-container-high transition-colors ${isListening ? "bg-danger text-white" : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container"} disabled:cursor-not-allowed disabled:opacity-40`}
+          >
+            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+          </button>
           <button
             type="submit"
             disabled={!input.trim() || loading}

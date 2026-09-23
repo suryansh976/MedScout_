@@ -13,42 +13,67 @@ const ACCESS_TOKEN_KEY = "medscout_access_token";
 const REFRESH_TOKEN_KEY = "medscout_refresh_token";
 const USER_KEY = "medscout_user";
 
+function getAuthStorage() {
+  return sessionStorage.getItem(ACCESS_TOKEN_KEY) ? sessionStorage : localStorage;
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
-      const stored = localStorage.getItem(USER_KEY);
+      const stored = getAuthStorage().getItem(USER_KEY);
       return stored ? JSON.parse(stored) : null;
     } catch {
       return null;
     }
   });
-  const [accessToken, setAccessToken] = useState(() => localStorage.getItem(ACCESS_TOKEN_KEY));
+  const [accessToken, setAccessToken] = useState(() => getAuthStorage().getItem(ACCESS_TOKEN_KEY));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const refreshTimerRef = useRef(null);
+  const refreshAttemptedRef = useRef(false);
+  const silentRefreshRef = useRef(null);
 
   // ── Persist state to localStorage ─────────────────────────────────────────
-  const persist = useCallback((userData, access, refresh) => {
+  const persist = useCallback((userData, access, refresh, storage = localStorage) => {
+    const otherStorage = storage === localStorage ? sessionStorage : localStorage;
+    otherStorage.removeItem(USER_KEY);
+    otherStorage.removeItem(ACCESS_TOKEN_KEY);
+    otherStorage.removeItem(REFRESH_TOKEN_KEY);
     if (userData) {
-      localStorage.setItem(USER_KEY, JSON.stringify(userData));
+      storage.setItem(USER_KEY, JSON.stringify(userData));
     } else {
-      localStorage.removeItem(USER_KEY);
+      storage.removeItem(USER_KEY);
     }
     if (access) {
-      localStorage.setItem(ACCESS_TOKEN_KEY, access);
+      storage.setItem(ACCESS_TOKEN_KEY, access);
     } else {
-      localStorage.removeItem(ACCESS_TOKEN_KEY);
+      storage.removeItem(ACCESS_TOKEN_KEY);
     }
     if (refresh) {
-      localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+      storage.setItem(REFRESH_TOKEN_KEY, refresh);
     } else {
-      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      storage.removeItem(REFRESH_TOKEN_KEY);
     }
+  }, []);
+
+  // ── Clear auth state ──────────────────────────────────────────────────────
+  const clearAuth = useCallback(() => {
+    setUser(null);
+    setAccessToken(null);
+    persist(null, null, null);
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+  }, [persist]);
+
+  const scheduleRefresh = useCallback(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    // Access token expires in 15 min; refresh after 13 min.
+    refreshTimerRef.current = setTimeout(() => silentRefreshRef.current?.(), 13 * 60 * 1000);
   }, []);
 
   // ── Silent token refresh ──────────────────────────────────────────────────
   const silentRefresh = useCallback(async () => {
-    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+    const storage = getAuthStorage();
+    const refreshToken = storage.getItem(REFRESH_TOKEN_KEY);
     if (!refreshToken) return;
 
     try {
@@ -61,36 +86,27 @@ export function AuthProvider({ children }) {
       if (data.success) {
         setUser(data.data.user);
         setAccessToken(data.data.accessToken);
-        persist(data.data.user, data.data.accessToken, data.data.refreshToken);
-        // Schedule next refresh (access token lasts 15 min — refresh at 13 min)
+        persist(data.data.user, data.data.accessToken, data.data.refreshToken, storage);
         scheduleRefresh();
       } else {
-        // Refresh failed — log out silently
         clearAuth();
       }
     } catch {
-      // Network error — keep user logged in optimistically, retry later
+      // Keep the current session during transient network failures.
     }
-  }, [persist]);
+  }, [clearAuth, persist, scheduleRefresh]);
 
-  const scheduleRefresh = useCallback(() => {
-    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    // Access token expires in 15 min → refresh after 13 min
-    refreshTimerRef.current = setTimeout(silentRefresh, 13 * 60 * 1000);
+  useEffect(() => {
+    silentRefreshRef.current = silentRefresh;
   }, [silentRefresh]);
-
-  // ── Clear auth state ──────────────────────────────────────────────────────
-  const clearAuth = useCallback(() => {
-    setUser(null);
-    setAccessToken(null);
-    persist(null, null, null);
-    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-  }, [persist]);
 
   // ── On mount: check stored tokens ─────────────────────────────────────────
   useEffect(() => {
-    const storedAccess = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const storedRefresh = localStorage.getItem(REFRESH_TOKEN_KEY);
+    if (refreshAttemptedRef.current) return undefined;
+    refreshAttemptedRef.current = true;
+    const storage = getAuthStorage();
+    const storedAccess = storage.getItem(ACCESS_TOKEN_KEY);
+    const storedRefresh = storage.getItem(REFRESH_TOKEN_KEY);
     if (storedAccess && storedRefresh) {
       // Attempt silent refresh immediately to validate session
       silentRefresh();
@@ -98,10 +114,10 @@ export function AuthProvider({ children }) {
     return () => {
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     };
-  }, []);
+  }, [silentRefresh]);
 
   // ── Login ─────────────────────────────────────────────────────────────────
-  const login = useCallback(async (email, password) => {
+  const login = useCallback(async (email, password, remember = true) => {
     setLoading(true);
     setError(null);
     try {
@@ -117,7 +133,7 @@ export function AuthProvider({ children }) {
       }
       setUser(data.data.user);
       setAccessToken(data.data.accessToken);
-      persist(data.data.user, data.data.accessToken, data.data.refreshToken);
+      persist(data.data.user, data.data.accessToken, data.data.refreshToken, remember ? localStorage : sessionStorage);
       scheduleRefresh();
       return { success: true, user: data.data.user };
     } catch (err) {
@@ -160,7 +176,8 @@ export function AuthProvider({ children }) {
 
   // ── Logout ────────────────────────────────────────────────────────────────
   const logout = useCallback(async () => {
-    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+    const storage = getAuthStorage();
+    const refreshToken = storage.getItem(REFRESH_TOKEN_KEY);
     try {
       await fetch(`${API_BASE}/auth/logout`, {
         method: "POST",
@@ -175,7 +192,7 @@ export function AuthProvider({ children }) {
 
   // ── Auth fetch helper (attaches Bearer token) ─────────────────────────────
   const authFetch = useCallback(async (url, options = {}) => {
-    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const token = getAuthStorage().getItem(ACCESS_TOKEN_KEY);
     return fetch(url, {
       ...options,
       headers: {

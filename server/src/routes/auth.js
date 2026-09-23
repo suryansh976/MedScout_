@@ -39,7 +39,8 @@ const REFRESH_EXPIRY = "7d";
 
 function signRefreshToken(userId) {
   return jwt.sign({ sub: userId, type: "refresh" }, REFRESH_SECRET, {
-    expiresIn: REFRESH_EXPIRY
+    expiresIn: REFRESH_EXPIRY,
+    jwtid: randomBytes(16).toString("hex")
   });
 }
 

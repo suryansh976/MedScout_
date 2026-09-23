@@ -32,14 +32,15 @@ export default function AdminVerificationView() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [evRes, auditRes] = await Promise.all([
-        authFetch("/api/admin/evidence"),
-        authFetch("/api/admin/audit")
-      ]);
+      const evRes = await authFetch("/api/admin/evidence");
       const evData = await evRes.json();
-      const auditData = await auditRes.json();
       if (evData.success) setEvidenceList(evData.data);
-      if (auditData.success) setAuditLogs(auditData.data);
+      if (isVerifier()) {
+        const auditData = await (await authFetch("/api/admin/audit")).json();
+        if (auditData.success) setAuditLogs(auditData.data);
+      } else {
+        setAuditLogs([]);
+      }
     } catch (err) {
       console.error("Error loading admin records", err);
     } finally {
@@ -120,13 +121,15 @@ export default function AdminVerificationView() {
             <span>Sync Registry</span>
           </button>
 
-          <button
-            onClick={() => setShowSubmitModal(true)}
-            className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-dark text-white text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-md transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Submit Evidence Claim</span>
-          </button>
+          {isHospitalAdmin() && (
+            <button
+              onClick={() => setShowSubmitModal(true)}
+              className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-dark text-white text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-md transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Submit Evidence Claim</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -238,7 +241,7 @@ export default function AdminVerificationView() {
                     </span>
                   </td>
                   <td className="p-4 text-right">
-                    {item.status === "PENDING_REVIEW" ? (
+                    {isVerifier() && item.status === "PENDING_REVIEW" ? (
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => handleUpdateStatus(item.id, "APPROVED")}
@@ -265,7 +268,7 @@ export default function AdminVerificationView() {
       </div>
 
       {/* Immutable Audit Log Timeline */}
-      <div className="bg-white rounded-2xl p-5 border border-surface-container-high shadow-sm space-y-4">
+      {isVerifier() && <div className="bg-white rounded-2xl p-5 border border-surface-container-high shadow-sm space-y-4">
         <div className="flex items-center gap-2">
           <History className="w-4 h-4 text-secondary" />
           <h2 className="font-headline font-bold text-base text-on-surface">
@@ -291,7 +294,7 @@ export default function AdminVerificationView() {
             </div>
           ))}
         </div>
-      </div>
+      </div>}
 
       {/* Submit Claim Modal */}
       {showSubmitModal && (

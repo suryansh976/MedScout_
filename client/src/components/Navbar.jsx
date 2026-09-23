@@ -1,10 +1,10 @@
 import React from "react";
-import { Activity, Sparkles, UserRound } from "lucide-react";
+import { Activity, Moon, Sparkles, Sun, UserRound } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import AuthModal from "./auth/AuthModal.jsx";
 import UserMenu from "./auth/UserMenu.jsx";
 
-export default function Navbar({ activeTab, setActiveTab, queuedCount, onOpenCompare, onOpenChat, onOpenProfile }) {
+export default function Navbar({ activeTab, setActiveTab, queuedCount, onOpenCompare, onOpenChat, onOpenProfile, isDarkMode, onToggleDarkMode }) {
   const { isAuthenticated, isHospitalAdmin, isVerifier } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = React.useState(false);
 
@@ -51,22 +51,17 @@ export default function Navbar({ activeTab, setActiveTab, queuedCount, onOpenCom
             </button>
 
             <button
-              onClick={() => {
-                setActiveTab("discovery");
-                if (queuedCount > 0) onOpenCompare();
-              }}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-all ${
-                activeTab === "compare"
-                  ? "text-primary font-semibold bg-surface-container-low"
-                  : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/60"
-              }`}
+              onClick={onOpenChat}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/60 transition-all"
             >
-              <span>Compare Hospitals</span>
-              {queuedCount > 0 && (
-                <span className="px-1.5 py-0.2 text-[11px] font-bold rounded-full bg-primary text-white">
-                  {queuedCount}
-                </span>
-              )}
+              AI Assistant
+            </button>
+
+            <button
+              onClick={() => setActiveTab("card")}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === "card" ? "text-primary font-semibold bg-surface-container-low" : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/60"}`}
+            >
+              My Health Card
             </button>
 
             <button
@@ -77,7 +72,7 @@ export default function Navbar({ activeTab, setActiveTab, queuedCount, onOpenCom
                   : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/60"
               }`}
             >
-              Disease Protocols
+              Conditions & Treatments
             </button>
 
             <button
@@ -88,7 +83,7 @@ export default function Navbar({ activeTab, setActiveTab, queuedCount, onOpenCom
                   : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/60"
               }`}
             >
-              Data Provenance
+              Where Our Data Comes From
             </button>
 
             {isVerifier() && (
@@ -100,7 +95,7 @@ export default function Navbar({ activeTab, setActiveTab, queuedCount, onOpenCom
                     : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/60"
                 }`}
               >
-                Admin Verification
+                Verified Admin Access
               </button>
             )}
           </nav>
@@ -108,11 +103,20 @@ export default function Navbar({ activeTab, setActiveTab, queuedCount, onOpenCom
 
         {/* Right Controls */}
         <div className="flex items-center gap-3">
+          <button
+            onClick={onToggleDarkMode}
+            title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-surface-container-high text-on-surface-variant transition-colors hover:bg-surface-container-low"
+          >
+            {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
+
           {/* ABDM & MoHFW Synced Pill */}
           <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-low border border-surface-container-high/60">
             <span className="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
             <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider">
-              ABDM & MoHFW Synced
+              Government-Linked Data
             </span>
           </div>
 
@@ -122,7 +126,7 @@ export default function Navbar({ activeTab, setActiveTab, queuedCount, onOpenCom
             className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-secondary-container text-secondary font-semibold text-sm hover:bg-secondary-fixed/70 transition-all shadow-[0_1px_4px_rgba(0,106,106,0.12)] border border-secondary/20"
           >
             <Sparkles className="w-4 h-4 text-secondary animate-pulse" />
-            <span>AI Clinical Guide</span>
+            <span>Ask AI</span>
           </button>
 
           {/* Clinical Portal */}

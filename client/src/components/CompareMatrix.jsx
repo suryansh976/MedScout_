@@ -1,8 +1,23 @@
 import React, { useState } from "react";
+import { useAuth } from "../context/AuthContext.jsx";
 import { X, Check, AlertCircle, ShieldCheck, Download, Layers, TrendingDown, Activity, MapPin } from "lucide-react";
 
 export default function CompareMatrix({ hospitals, onClose, onRemoveHospital }) {
+  const { isAuthenticated, authFetch } = useAuth();
   const [highlightDifferences, setHighlightDifferences] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+
+  const saveComparison = async () => {
+    if (!isAuthenticated) {
+      window.dispatchEvent(new CustomEvent("medscout:open-auth"));
+      return;
+    }
+    const response = await authFetch("/api/user/saved-comparisons", {
+      method: "POST",
+      body: JSON.stringify({ hospitalIds: hospitals.map(hospital => hospital.id), diseaseId: "dis_cabg", treatmentId: "trt_cabg_onpump" })
+    });
+    if (response.ok) setSaveMessage("Comparison saved");
+  };
 
   if (!hospitals || hospitals.length === 0) {
     return (
@@ -167,6 +182,13 @@ export default function CompareMatrix({ hospitals, onClose, onRemoveHospital }) 
             >
               <Download className="w-3.5 h-3.5" />
               <span>Print / Export Audit</span>
+            </button>
+
+            <button
+              onClick={saveComparison}
+              className="px-3 py-1.5 rounded-xl border border-primary/20 bg-primary/5 text-primary text-xs font-semibold hover:bg-primary/10 transition-colors"
+            >
+              {saveMessage || "Save Comparison"}
             </button>
 
             <button

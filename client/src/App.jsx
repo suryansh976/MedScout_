@@ -13,14 +13,17 @@ import DataProvenanceView from "./components/DataProvenanceView";
 import DiseaseProtocolsView from "./components/DiseaseProtocolsView";
 import Footer from "./components/Footer";
 import ProfilePage from "./pages/ProfilePage.jsx";
+import HealthCardPage from "./pages/HealthCardPage.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
-import { Sparkles, Layers, SlidersHorizontal, RefreshCw } from "lucide-react";
+import { Sparkles, SlidersHorizontal, RefreshCw } from "lucide-react";
 
 export default function App() {
   const { isVerifier } = useAuth();
-  const [activeTab, setActiveTab] = useState("discovery"); // discovery, protocols, provenance, admin
+  const [isDarkMode, setIsDarkMode] = useState(() => window.localStorage.getItem("medscout-theme") === "dark");
+  const [activeTab, setActiveTab] = useState("discovery"); // discovery, card, protocols, provenance, admin
   const [hospitals, setHospitals] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hospitalError, setHospitalError] = useState("");
 
   // Filters
   const [selectedCondition, setSelectedCondition] = useState("Coronary Artery Bypass (CABG)");
@@ -36,11 +39,17 @@ export default function App() {
   // AI Chatbot Drawer
   const [isChatOpen, setIsChatOpen] = useState(false);
 
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", isDarkMode);
+    window.localStorage.setItem("medscout-theme", isDarkMode ? "dark" : "light");
+  }, [isDarkMode]);
+
   // Fetch hospitals based on active condition & budget
   const fetchHospitals = async () => {
     setLoading(true);
+    setHospitalError("");
     try {
-      let url = `/api/hospitals?query=`;
+      let url = `/api/hospitals?disease=${encodeURIComponent(selectedCondition)}&query=`;
       if (selectedBudget && selectedBudget.includes("PM-JAY")) {
         url += `&maxBudget=220000`;
       } else if (selectedBudget && selectedBudget.includes("3,50,000")) {
@@ -48,6 +57,7 @@ export default function App() {
       }
 
       const res = await fetch(url);
+      if (!res.ok) throw new Error(`Hospital registry returned ${res.status}`);
       const data = await res.json();
       if (data.success) {
         setHospitals(data.data);
@@ -55,9 +65,13 @@ export default function App() {
         if (queuedHospitals.length === 0 && data.data.length >= 2) {
           setQueuedHospitals([data.data[0], data.data[1]]);
         }
+      } else {
+        throw new Error(data.error || "Hospital registry request failed");
       }
     } catch (err) {
       console.error("Failed to load hospitals:", err);
+      setHospitals([]);
+      setHospitalError("Hospital registry is unavailable. Start the MedScout server on port 5000 and try again.");
     } finally {
       setLoading(false);
     }
@@ -114,6 +128,8 @@ export default function App() {
         onOpenCompare={() => setIsCompareMatrixOpen(true)}
         onOpenChat={() => setIsChatOpen(true)}
         onOpenProfile={() => setActiveTab("profile")}
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={() => setIsDarkMode(value => !value)}
       />
 
       <main className="flex-1 pt-16">
@@ -140,37 +156,45 @@ export default function App() {
                 <div>
                   <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded bg-secondary-container text-secondary text-[11px] font-bold uppercase tracking-wider mb-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
-                    <span>Live Registry Pull • Snapshot as of Q3 Clinical Verification Run</span>
+                    <span>Updated quarterly • Last check: Q3</span>
                   </div>
                   <h2 className="font-headline font-bold text-2xl sm:text-3xl text-on-surface">
                     Clinical Comparison: {selectedCondition}
                   </h2>
                   <p className="text-xs sm:text-sm text-tertiary mt-1">
-                    Real clinical data from MoHFW statutory returns & ABDM registered surgical programs in New Delhi NCR.
+                    Sourced from official government health records for hospitals in Delhi NCR.
                   </p>
                 </div>
 
-                <button
-                  onClick={() => setIsCompareMatrixOpen(true)}
-                  className="px-4 py-2 rounded-xl bg-surface-container-low hover:bg-surface-container text-primary font-semibold text-xs sm:text-sm border border-surface-container-high flex items-center gap-2 transition-colors shadow-sm self-start sm:self-auto"
-                >
-                  <Layers className="w-4 h-4 text-primary" />
-                  <span>Launch Full Comparison Matrix ({queuedHospitals.length})</span>
-                </button>
               </div>
 
               {/* Live Hospital Cards Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-                {hospitals.map((hosp) => (
-                  <HospitalCard
-                    key={hosp.id}
-                    hospital={hosp}
-                    isQueued={queuedHospitals.some(q => q.id === hosp.id)}
-                    onToggleQueue={handleToggleQueue}
-                    onOpenDetails={(h) => setSelectedHospitalForModal(h)}
-                  />
-                ))}
-              </div>
+              {loading ? (
+                <div className="mt-8 rounded-2xl border border-surface-container-high bg-surface-container-low p-8 text-center text-sm text-tertiary">
+                  Loading hospitals from the clinical registry…
+                </div>
+              ) : hospitalError ? (
+                <div className="mt-8 rounded-2xl border border-danger/30 bg-danger-light p-8 text-center text-sm text-danger">
+                  <p>{hospitalError}</p>
+                  <button onClick={fetchHospitals} className="mt-4 rounded-lg bg-danger px-4 py-2 text-xs font-semibold text-white">Retry registry connection</button>
+                </div>
+              ) : hospitals.length === 0 ? (
+                <div className="mt-8 rounded-2xl border border-warning/30 bg-warning-light p-8 text-center text-sm text-warning">
+                  No hospitals match the current search criteria.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-6 mt-8 md:grid-cols-2 lg:grid-cols-3">
+                  {hospitals.map((hosp) => (
+                    <HospitalCard
+                      key={hosp.id}
+                      hospital={hosp}
+                      isQueued={queuedHospitals.some(q => q.id === hosp.id)}
+                      onToggleQueue={handleToggleQueue}
+                      onOpenDetails={(h) => setSelectedHospitalForModal(h)}
+                    />
+                  ))}
+                </div>
+              )}
             </section>
 
             {/* Transparent 5-Tier Ranking Methodology Section */}
@@ -192,6 +216,8 @@ export default function App() {
 
         {/* VIEW 3: DATA PROVENANCE & REGISTRY STANDARDS */}
         {activeTab === "provenance" && <DataProvenanceView />}
+
+        {activeTab === "card" && <HealthCardPage onOpenChat={() => setIsChatOpen(true)} />}
 
         {/* VIEW 4: ADMIN VERIFICATION WORKBENCH */}
         {activeTab === "admin" && (isVerifier() ? <AdminVerificationView /> : null)}

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { 
   Search, 
   Sparkles, 
@@ -22,11 +22,22 @@ export default function SearchHero({
   setSelectedBudget,
   hospitalCount = 5 
 }) {
-  const [searchMode, setSearchMode] = useState("structured");
+  const [searchMode, setSearchMode] = useState("ai");
   const [treatment, setTreatment] = useState("Minimally Invasive On-Pump (CABG)");
   const [locationHub, setLocationHub] = useState("New Delhi NCR (Within 25 km)");
   const [accreditation, setAccreditation] = useState("NABH Tertiary + ABDM HFR Synced");
   const [nlpPrompt, setNlpPrompt] = useState("");
+  const [language, setLanguage] = useState("English");
+  const [diseaseOptions, setDiseaseOptions] = useState([]);
+
+  useEffect(() => {
+    fetch("/api/diseases")
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) setDiseaseOptions(data.data.diseases || []);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleStructuredSubmit = (e) => {
     e.preventDefault();
@@ -76,24 +87,21 @@ export default function SearchHero({
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-surface-container-low border border-surface-container-high/80 shadow-sm">
             <span className="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
             <span className="text-[11px] font-bold text-secondary uppercase tracking-widest">
-              Registry-Backed Institutional Search
+              Backed by Government Records
             </span>
             <span className="text-outline-variant">•</span>
             <span className="text-[11px] font-semibold text-tertiary uppercase">
-              Zero Paid Placements
+              No Paid Listings
             </span>
           </div>
 
           {/* Display Hero Title */}
           <h1 className="font-headline text-3xl sm:text-4xl lg:text-5xl font-extrabold text-on-surface tracking-tight leading-[1.15]">
-            Evidence-Based Hospital Discovery &{" "}
-            <span className="text-primary underline decoration-secondary decoration-wavy decoration-2 underline-offset-8">
-              Disease-Specific Clinical Outcomes
-            </span>
+            Find the Right Hospital, Backed by Real Data
           </h1>
 
           <p className="text-base sm:text-lg text-tertiary max-w-3xl leading-relaxed">
-            Search verified treatments, compare documented procedure costs, and evaluate hospitals using transparent registry evidence — never opaque marketing ratings or sponsored stars.
+            Compare real treatment costs and outcomes from verified government records — not paid ratings or sponsored listings.
           </p>
         </div>
 
@@ -157,10 +165,14 @@ export default function SearchHero({
                       onChange={(e) => setSelectedCondition(e.target.value)}
                       className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-surface-container-low/70 border border-surface-container-high text-sm font-medium text-on-surface focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
                     >
-                      <option value="Coronary Artery Bypass (CABG)">Coronary Artery Bypass (CABG) - I25.1</option>
-                      <option value="Severe Knee Osteoarthritis">Severe Knee Osteoarthritis - M17.0</option>
-                      <option value="Hematologic Malignancies (Leukemia)">Hematologic Malignancies (Leukemia) - C92.0</option>
-                      <option value="Chronic Kidney Disease">Chronic Kidney Disease (ESRD) - N18.5</option>
+                      {(diseaseOptions.length > 0 ? diseaseOptions : [
+                        { name: "Coronary Artery Bypass (CABG)", icd10: "I25.1" },
+                        { name: "Severe Knee Osteoarthritis", icd10: "M17.0" },
+                        { name: "Hematologic Malignancies (Leukemia)", icd10: "C92.0" },
+                        { name: "Chronic Kidney Disease", icd10: "N18.5" }
+                      ]).map(disease => (
+                        <option key={disease.name} value={disease.name}>{disease.name} - {disease.icd10}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -211,7 +223,7 @@ export default function SearchHero({
                 {/* 4. Location Hub */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[11px] font-bold text-tertiary uppercase tracking-wider">
-                    Geographic Hub
+                    Location
                   </label>
                   <div className="relative flex items-center">
                     <MapPin className="w-4 h-4 text-outline absolute left-3 pointer-events-none" />
@@ -227,7 +239,7 @@ export default function SearchHero({
                 {/* 5. Accreditation */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[11px] font-bold text-tertiary uppercase tracking-wider">
-                    Registry Accreditation
+                    Hospital Certification
                   </label>
                   <div className="relative flex items-center">
                     <Award className="w-4 h-4 text-outline absolute left-3 pointer-events-none" />
@@ -260,24 +272,39 @@ export default function SearchHero({
             /* MODE B: Natural Language AI Diagnosis Intake */
             <form onSubmit={handleNlpSubmit} className="mt-5 space-y-4">
               <div className="p-4 rounded-xl bg-surface-container-low/60 border border-surface-container-high">
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center justify-between gap-2 mb-2">
                   <Sparkles className="w-4 h-4 text-secondary" />
                   <span className="text-xs font-bold text-secondary uppercase tracking-wider">
-                    Natural Language Medical Intake Parser
+                    Describe your situation in your own words
                   </span>
+                  <label className="ml-auto flex items-center gap-1.5 text-[11px] font-semibold text-tertiary">
+                    Language
+                    <select value={language} onChange={(event) => setLanguage(event.target.value)} className="rounded-md border border-surface-container-high bg-white px-1.5 py-1 text-[11px] text-on-surface">
+                      <option>English</option>
+                      <option>Hindi</option>
+                      <option>Punjabi</option>
+                    </select>
+                  </label>
                 </div>
                 <textarea
                   rows="3"
                   value={nlpPrompt}
                   onChange={(e) => setNlpPrompt(e.target.value)}
-                  placeholder="Describe patient condition, clinical findings, budget ceiling, or location constraints (e.g. 'Father diagnosed with triple vessel coronary disease, budget ₹3.5L in NCR, need hospitals with audited CABG mortality under 1.5%')..."
+                  placeholder="Tell us what is going on, where you are, and your budget. You can describe symptoms or a confirmed condition in your own words."
                   className="w-full p-3 rounded-xl bg-white border border-surface-container-high text-sm text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
                 />
               </div>
 
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-tertiary">
-                  <span className="font-semibold">Quick Scenarios:</span>
+                  <span className="font-semibold">Try an example:</span>
+                  <button
+                    type="button"
+                    onClick={() => setNlpPrompt("I don't know what's wrong. I have symptoms and need help finding the right specialty.")}
+                    className="px-2.5 py-1 rounded-lg bg-primary text-white transition-colors"
+                  >
+                    Not sure what this is?
+                  </button>
                   <button
                     type="button"
                     onClick={() => setScenario("My father has triple vessel disease, budget is around 3 Lakhs in NCR, need hospitals with published CABG volume.", "Coronary Artery Bypass (CABG)", "₹2,00,000 – ₹3,50,000 (Tier 2-3 Institutional)")}
@@ -299,7 +326,7 @@ export default function SearchHero({
                   className="py-2.5 px-6 rounded-xl bg-secondary hover:bg-secondary/90 text-white font-semibold text-sm flex items-center gap-2 shadow-sm transition-all"
                 >
                   <Sparkles className="w-4 h-4" />
-                  <span>Extract Entities & Search</span>
+                  <span>Find hospitals</span>
                 </button>
               </div>
             </form>
@@ -308,7 +335,7 @@ export default function SearchHero({
           {/* Audited Datasets Fast Filters */}
           <div className="mt-5 pt-4 border-t border-surface-container-high/60 flex flex-wrap items-center gap-2">
             <span className="text-xs font-bold text-tertiary uppercase tracking-wider mr-1">
-              Audited Datasets:
+              Verified data available for:
             </span>
             <button
               onClick={() => setSelectedCondition("Coronary Artery Bypass (CABG)")}

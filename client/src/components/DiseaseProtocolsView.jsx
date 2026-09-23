@@ -92,6 +92,21 @@ export default function DiseaseProtocolsView({ onSelectCondition }) {
 
           {/* Clinical Benchmarks & Costing Architecture */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="p-4 rounded-2xl bg-surface-container-low/70 border border-surface-container-high">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-secondary">Common conditions</span>
+                <div className="mt-2 flex flex-wrap gap-1.5">{(selectedDisease.commonConditions || []).map(item => <span key={item} className="rounded-lg bg-white px-2 py-1 text-[11px] text-on-surface border border-surface-container-high">{item}</span>)}</div>
+              </div>
+              <div className="p-4 rounded-2xl bg-surface-container-low/70 border border-surface-container-high">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-secondary">Care pathway</span>
+                <ul className="mt-2 space-y-1 text-[11px] text-on-surface">{(selectedDisease.carePathways || []).map(item => <li key={item}>• {item}</li>)}</ul>
+              </div>
+              <div className="p-4 rounded-2xl bg-surface-container-low/70 border border-surface-container-high">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-secondary">Evidence measures</span>
+                <ul className="mt-2 space-y-1 text-[11px] text-on-surface">{(selectedDisease.evidenceMeasures || []).map(item => <li key={item}>• {item}</li>)}</ul>
+              </div>
+            </div>
+
             {/* Key Clinical Quality Endpoints */}
             <div className="p-5 rounded-2xl bg-surface-container-low/70 border border-surface-container-high space-y-3">
               <span className="text-xs font-bold text-secondary uppercase tracking-wider flex items-center gap-1.5">

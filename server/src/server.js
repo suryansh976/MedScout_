@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
@@ -73,7 +74,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, error: "Internal server error." });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`=======================================================`);
   console.log(`  MedScout Clinical Evidence REST API v2.0 — Auth      `);
   console.log(`  Port: http://localhost:${PORT}                       `);
@@ -87,4 +88,16 @@ app.listen(PORT, () => {
   console.log(`  hospital@demo.com  / Demo@1234  → hospital_admin`);
   console.log(`  verifier@demo.com  / Demo@1234  → verifier`);
   console.log(`  admin@demo.com     / Demo@1234  → platform_admin\n`);
+});
+
+server.on("error", error => {
+  if (error.code === "EADDRINUSE") {
+    console.error(`MedScout API could not start: port ${PORT} is already in use.`);
+    console.error(`The existing service may already be running, or start this instance with PORT=5001 npm start.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  console.error("MedScout API failed to start:", error);
+  process.exitCode = 1;
 });
